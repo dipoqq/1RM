@@ -1,0 +1,70 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Secrets.
+#
+# The Supabase URL/anon key and the Gemini key are passed at build time with
+# --dart-define (see README.md), so they should never reach a file in the repo.
+# These rules are the backstop for when someone reaches for a file instead.
+.env
+.env.*
+!.env.example
+
+# Dart files that conventionally hold injected keys.
+lib/secrets.dart
+lib/env.dart
+**/*.secrets.dart
+
+# Android signing. android/.gitignore already covers key.properties and the
+# keystores under android/; these catch one dropped at the repo root.
+*.jks
+*.keystore
+key.properties
+
+# Firebase/GCP service config (not used today — insurance if it ever is).
+google-services.json
+GoogleService-Info.plist
+**/service-account*.json
