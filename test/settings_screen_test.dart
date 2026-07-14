@@ -1,0 +1,119 @@
+import 'package:bench_app/core/l10n/app_locale.dart';
+import 'package:bench_app/models/profile.dart';
+import 'package:bench_app/state/app_state.dart';
+import 'package:bench_app/ui/settings_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'fake_backend.dart';
+
+/// The real screen, driven the way a user drives it.
+void main() {
+  late FakeBackend backend;
+  late AppState state;
+
+  Future<void> open(WidgetTester tester, {Profile? profile}) async {
+    backend = FakeBackend(profile: profile);
+    state = AppState(backend, initial: profile);
+    addTearDown(state.dispose);
+    addTearDown(backend.dispose);
+
+    await tester.pumpWidget(AppScope(
+      state: state,
+      child: MaterialApp(
+        home: AppScope(state: state, child: const SettingsScreen()),
+      ),
+    ));
+  }
+
+  /// Save sits below the fold on the 800×600 test surface now that the screen
+  /// carries a gender card too — scroll to it the way a thumb would.
+  Future<void> tapSave(WidgetTester tester, {String label = 'Save'}) async {
+    final save = find.widgetWithText(FilledButton, label);
+    await tester.ensureVisible(save);
+    await tester.pump();
+    await tester.tap(save);
+  }
+
+  testWidgets('typing a custom bench goal saves it and updates the app',
+      (tester) async {
+    await open(tester, profile: const Profile(benchGoalKg: 95));
+
+    // The field opens on the goal in force.
+    expect(find.widgetWithText(TextField, '95'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), '90');
+    await tapSave(tester);
+    await tester.pumpAndSettle();
+
+    expect(state.profile.benchGoalKg, 90);
+    expect(backend.saves.single.benchGoalKg, 90);
+    // And the bench press metrics everywhere else now measure against 90.
+    expect(state.profile.benchProgress(45).percent, 50);
+  });
+
+  testWidgets('a successful save is confirmed to the user', (tester) async {
+    await open(tester, profile: const Profile(benchGoalKg: 95));
+
+    await tester.enterText(find.byType(TextField), '100');
+    await tapSave(tester);
+    await tester.pump(); // let the SnackBar in
+
+    expect(find.text('Settings saved successfully!'), findsOneWidget);
+  });
+
+  testWidgets('the success message is localized', (tester) async {
+    await open(tester, profile: const Profile(locale: AppLocale.ru));
+
+    await tester.enterText(find.byType(TextField), '100');
+    await tapSave(tester, label: 'Сохранить');
+    await tester.pump();
+
+    expect(find.text('Настройки успешно сохранены!'), findsOneWidget);
+  });
+
+  testWidgets('a typo is rejected instead of being persisted', (tester) async {
+    await open(tester, profile: const Profile(benchGoalKg: 95));
+
+    await tester.enterText(find.byType(TextField), '950'); // meant 95
+    await tapSave(tester);
+    await tester.pump();
+
+    expect(find.text('Enter a target between 20 and 500 kg.'), findsOneWidget);
+    expect(backend.saves, isEmpty);
+    expect(state.profile.benchGoalKg, 95);
+    // And a rejected goal is never dressed up as a success.
+    expect(find.text('Settings saved successfully!'), findsNothing);
+  });
+
+  testWidgets('picking a gender persists it and re-scores the targets',
+      (tester) async {
+    await open(tester, profile: const Profile()); // male by default
+
+    final before = state.profile.targets.bmr;
+
+    await tester.tap(find.text('Female'));
+    await tester.pumpAndSettle();
+
+    expect(state.profile.gender, Gender.female);
+    expect(backend.saves.single.gender, Gender.female);
+    // The whole point of the field: the daily targets move with it.
+    expect(state.profile.targets.bmr, closeTo(before - 166, 0.01));
+  });
+
+  testWidgets('the language toggle switches the whole screen', (tester) async {
+    await open(tester, profile: const Profile(locale: AppLocale.en));
+
+    expect(find.text('Settings'), findsOneWidget); // the AppBar
+    // SectionCard upper-cases its title, so this is the card heading.
+    expect(find.text('BENCH PRESS GOAL'), findsOneWidget);
+
+    await tester.tap(find.text('Русский'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Настройки'), findsOneWidget);
+    expect(find.text('ЦЕЛЬ В ЖИМЕ ЛЁЖА'), findsOneWidget);
+    expect(state.profile.locale, AppLocale.ru);
+    expect(backend.saves.single.locale, AppLocale.ru);
+  });
+}

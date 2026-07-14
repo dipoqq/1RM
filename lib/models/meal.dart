@@ -23,9 +23,6 @@ class Meal {
   final double carbs;
   final double fats;
 
-  String get summary =>
-      '${calories.round()} kcal · ${protein.round()} g protein';
-
   factory Meal.fromJson(Map<String, dynamic> json) => Meal(
         id: json['id'] as String?,
         day: DateTime.parse(json['date'] as String),

@@ -1,11 +1,11 @@
 {
-    "name": "bench_app",
-    "short_name": "bench_app",
+    "name": "1RM",
+    "short_name": "1RM",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Bench press progression and nutrition tracking.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

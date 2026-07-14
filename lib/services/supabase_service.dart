@@ -3,10 +3,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/meal.dart';
 import '../models/profile.dart';
 import '../models/workout.dart';
+import 'backend.dart';
 
 /// Everything that touches the database. Supabase types do not leak past this
-/// class — callers get models back, never a PostgrestResponse.
-class SupabaseService {
+/// class — callers get models back, never a PostgrestResponse, and never an
+/// AuthException.
+class SupabaseService implements Backend {
   SupabaseService(this._client);
 
   final SupabaseClient _client;
@@ -31,29 +33,53 @@ class SupabaseService {
     await Supabase.initialize(url: _url, publishableKey: _anonKey);
   }
 
-  Session? get session => _client.auth.currentSession;
+  @override
   String? get userId => _client.auth.currentUser?.id;
-  Stream<AuthState> get authChanges => _client.auth.onAuthStateChange;
+
+  @override
+  bool get isSignedIn => _client.auth.currentSession != null;
+
+  @override
+  Stream<AuthStatus> get authStatus => _client.auth.onAuthStateChange.map(
+        (state) => state.session == null
+            ? AuthStatus.signedOut
+            : AuthStatus.signedIn,
+      );
 
   String get _uid {
     final id = userId;
-    if (id == null) throw StateError('Not signed in.');
+    if (id == null) throw const BackendException('Not signed in.');
     return id;
   }
 
   // -- auth ------------------------------------------------------------------
 
-  Future<void> signIn(String email, String password) =>
-      _client.auth.signInWithPassword(email: email, password: password);
+  /// Auth failures are the one kind the user is expected to hit routinely (a
+  /// mistyped password), so they are translated into the app's own exception
+  /// rather than handed up as a Supabase type.
+  Future<T> _auth<T>(Future<T> Function() op) async {
+    try {
+      return await op();
+    } on AuthException catch (e) {
+      throw BackendException(e.message);
+    }
+  }
 
+  @override
+  Future<void> signIn(String email, String password) => _auth(
+        () => _client.auth.signInWithPassword(email: email, password: password),
+      );
+
+  @override
   Future<void> signUp(String email, String password) =>
-      _client.auth.signUp(email: email, password: password);
+      _auth(() => _client.auth.signUp(email: email, password: password));
 
-  Future<void> signOut() => _client.auth.signOut();
+  @override
+  Future<void> signOut() => _auth(() => _client.auth.signOut());
 
   // -- workouts --------------------------------------------------------------
 
-  /// Newest first — WorkoutHistory's plateau logic depends on that ordering.
+  @override
   Future<WorkoutHistory> fetchWorkouts() async {
     final rows = await _client
         .from('workouts')
@@ -65,17 +91,19 @@ class SupabaseService {
     );
   }
 
+  @override
   Future<void> addWorkout(Workout w) async {
     await _client.from('workouts').insert({...w.toInsert(), 'user_id': _uid});
   }
 
+  @override
   Future<void> deleteWorkout(String id) async {
     await _client.from('workouts').delete().eq('id', id).eq('user_id', _uid);
   }
 
   // -- meals -----------------------------------------------------------------
 
-  /// Meals for one calendar day, oldest first (the order they were eaten).
+  @override
   Future<List<Meal>> fetchMeals(DateTime day) async {
     final rows = await _client
         .from('meals')
@@ -86,15 +114,18 @@ class SupabaseService {
     return (rows as List).map((r) => Meal.fromJson(r)).toList();
   }
 
+  @override
   Future<void> addMeal(Meal m) async {
     await _client.from('meals').insert({...m.toInsert(), 'user_id': _uid});
   }
 
+  @override
   Future<void> deleteMeal(String id) async {
     await _client.from('meals').delete().eq('id', id).eq('user_id', _uid);
   }
 
   /// Wipe one day's log. Scoped to a single date so history is never touched.
+  @override
   Future<void> clearDay(DateTime day) async {
     await _client
         .from('meals')
@@ -105,6 +136,7 @@ class SupabaseService {
 
   // -- profile ---------------------------------------------------------------
 
+  @override
   Future<Profile> fetchProfile() async {
     final row = await _client
         .from('profiles')
@@ -116,16 +148,17 @@ class SupabaseService {
     return row == null ? const Profile() : Profile.fromJson(row);
   }
 
+  /// Writes the whole profile, language and bench goal included — which is what
+  /// makes both preferences show up on the other device.
+  @override
   Future<void> saveProfile(Profile p) async {
     await _client.from('profiles').upsert(p.toUpsert(_uid));
   }
 
-  /// Atomically claim a milestone celebration.
-  ///
-  /// Returns true only if this call is the one that claimed it — the caller may
-  /// then fire the confetti. Re-reads the profile first so a second device that
-  /// already celebrated 80 kg cannot celebrate it again. This is what makes
-  /// "for the first time" actually hold across restarts and devices.
+  /// Re-reads the profile first, so a second device that already celebrated
+  /// 80 kg cannot celebrate it again. This is what makes "for the first time"
+  /// actually hold across restarts and devices.
+  @override
   Future<bool> claimMilestone(double kg) async {
     final current = await fetchProfile();
     if (current.hasCelebrated(kg)) return false;

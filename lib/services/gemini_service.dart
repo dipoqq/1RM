@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:google_generative_ai/google_generative_ai.dart';
 
 import '../core/constants.dart';
+import '../core/l10n/app_strings.dart';
 import '../models/meal.dart';
 import '../models/profile.dart';
 
@@ -49,11 +50,13 @@ class GeminiService {
     String name,
     Targets targets,
     MacroTotals eaten,
+    AppStrings strings,
   ) =>
       GenerativeModel(
         model: name,
         apiKey: _apiKey,
-        systemInstruction: Content.system(_systemPrompt(targets, eaten)),
+        systemInstruction:
+            Content.system(_systemPrompt(targets, eaten, strings)),
       );
 
   static bool _retryable(Object e) {
@@ -66,7 +69,11 @@ class GeminiService {
         s.contains('overloaded');
   }
 
-  static String _systemPrompt(Targets targets, MacroTotals eaten) {
+  static String _systemPrompt(
+    Targets targets,
+    MacroTotals eaten,
+    AppStrings strings,
+  ) {
     final kcalLeft = (targets.kcal - eaten.calories).round();
     final proteinLeft = (targets.protein - eaten.protein).round();
     final carbsLeft = (targets.carbs - eaten.carbs).round();
@@ -86,12 +93,18 @@ Assess the meal he describes or photographs. Be concise and practical: estimate
 all four macros, say how the meal fits what he has left today, and give one
 specific adjustment if it does not fit.
 
+${strings.geminiReplyLanguage}
+
 Then, as the VERY LAST line of your reply and nothing after it, append this
 exact block with your numeric estimates:
 
 $_dataOpen Name: Meal Name | Calories: X | Protein: Y | Carbs: Z | Fats: W $_dataClose
 
-Use plain integers with no units inside the block.''';
+Use plain integers with no units inside the block. The block itself — the
+$_dataOpen and $_dataClose markers and the field names Name, Calories, Protein,
+Carbs and Fats — stays in English exactly as written above, whatever language
+the prose is in; it is parsed by the app, not read by the lifter. Only the meal
+name inside it is written in his language.''';
   }
 
   /// Analyse a meal from text and/or a photo.
@@ -105,6 +118,7 @@ Use plain integers with no units inside the block.''';
     required Targets targets,
     required MacroTotals eaten,
     required DateTime day,
+    required AppStrings strings,
   }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty && image == null) {
@@ -122,7 +136,8 @@ Use plain integers with no units inside the block.''';
     for (final name in _models) {
       final GenerateContentResponse response;
       try {
-        response = await _model(name, targets, eaten).generateContent(content);
+        response = await _model(name, targets, eaten, strings)
+            .generateContent(content);
       } catch (e) {
         if (!_retryable(e)) rethrow;
         lastError = e; // model retired or overloaded — fall through to the next

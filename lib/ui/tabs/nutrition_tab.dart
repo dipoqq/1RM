@@ -5,19 +5,20 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/l10n/app_strings.dart';
 import '../../core/theme.dart';
 import '../../models/meal.dart';
 import '../../models/profile.dart';
 import '../../services/gemini_service.dart';
-import '../../services/supabase_service.dart';
+import '../../state/app_state.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/calendar_strip.dart';
 import '../widgets/common.dart' as ui;
 
 class NutritionTab extends StatefulWidget {
-  const NutritionTab({super.key, required this.service});
+  const NutritionTab({super.key, required this.state});
 
-  final SupabaseService service;
+  final AppState state;
 
   @override
   State<NutritionTab> createState() => _NutritionTabState();
@@ -36,7 +37,6 @@ class _NutritionTabState extends State<NutritionTab> {
   /// Supabase under yesterday's date rather than carrying over.
   DateTime _selected = Meal.dayOf(DateTime.now());
 
-  Profile _profile = const Profile();
   List<Meal> _meals = const [];
   bool _loading = true;
   bool _analyzing = false;
@@ -44,6 +44,11 @@ class _NutritionTabState extends State<NutritionTab> {
   Uint8List? _image;
   String _imageMime = 'image/jpeg';
   String? _analysis;
+
+  /// The profile lives in AppState, not here — the bench goal and the language
+  /// on it are read by the Training tab and the shell as well, and two copies
+  /// of one row is how they drift apart.
+  Profile get _profile => widget.state.profile;
 
   DateTime get _today => Meal.dayOf(DateTime.now());
   bool get _isToday => _selected == _today;
@@ -66,29 +71,28 @@ class _NutritionTabState extends State<NutritionTab> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final profile = await widget.service.fetchProfile();
-      final meals = await widget.service.fetchMeals(_selected);
+      await widget.state.load();
+      final meals = await widget.state.service.fetchMeals(_selected);
       if (!mounted) return;
       setState(() {
-        _profile = profile;
         _meals = meals;
         _loading = false;
       });
       // Only seed the fields on first load; refilling them on every refresh
       // would fight the user while they are typing.
       if (_weightCtrl.text.isEmpty) {
-        _weightCtrl.text = _fmt(profile.weightKg);
+        _weightCtrl.text = ui.fmtKg(_profile.weightKg);
       }
       if (_heightCtrl.text.isEmpty) {
-        _heightCtrl.text = _fmt(profile.heightCm);
+        _heightCtrl.text = ui.fmtKg(_profile.heightCm);
       }
       if (_ageCtrl.text.isEmpty) {
-        _ageCtrl.text = profile.age.toString();
+        _ageCtrl.text = _profile.age.toString();
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      _snack('Could not load: $e');
+      _snack(context.s.couldNotLoad('$e'));
     }
   }
 
@@ -100,7 +104,7 @@ class _NutritionTabState extends State<NutritionTab> {
       _loading = true;
       _analysis = null;
     });
-    final meals = await widget.service.fetchMeals(_selected);
+    final meals = await widget.state.service.fetchMeals(_selected);
     if (!mounted) return;
     setState(() {
       _meals = meals;
@@ -112,21 +116,21 @@ class _NutritionTabState extends State<NutritionTab> {
     double? weight,
     double? height,
     int? age,
+    Gender? gender,
     Goal? goal,
     ActivityLevel? activity,
   }) async {
-    final next = _profile.copyWith(
-      weightKg: weight,
-      heightCm: height,
-      age: age,
-      goal: goal,
-      activity: activity,
-    );
-    setState(() => _profile = next);
     try {
-      await widget.service.saveProfile(next);
+      await widget.state.update(
+        weightKg: weight,
+        heightCm: height,
+        age: age,
+        gender: gender,
+        goal: goal,
+        activity: activity,
+      );
     } catch (e) {
-      if (mounted) _snack('Could not save settings: $e');
+      if (mounted) _snack(context.s.couldNotSaveSettings('$e'));
     }
   }
 
@@ -148,19 +152,20 @@ class _NutritionTabState extends State<NutritionTab> {
                 : 'image/jpeg');
       });
     } catch (e) {
-      if (mounted) _snack('Could not open the picker: $e');
+      if (mounted) _snack(context.s.couldNotOpenPicker('$e'));
     }
   }
 
   /// Run the Gemini call off the UI thread; the button spins and is disabled
   /// throughout, so the rest of the tab stays interactive.
   Future<void> _analyze() async {
+    final s = context.s;
     if (!GeminiService.isConfigured) {
-      _snack('GEMINI_API_KEY was not passed at build time. See README.md.');
+      _snack(s.geminiNotConfigured);
       return;
     }
     if (_describeCtrl.text.trim().isEmpty && _image == null) {
-      _snack('Describe your meal or attach a photo of your plate.');
+      _snack(s.describeOrPhoto);
       return;
     }
 
@@ -182,6 +187,8 @@ class _NutritionTabState extends State<NutritionTab> {
         targets: _profile.targets,
         eaten: MacroTotals.of(_meals),
         day: day,
+        // Gemini answers in the language the app is being read in.
+        strings: s,
       );
 
       if (!mounted) return;
@@ -190,12 +197,12 @@ class _NutritionTabState extends State<NutritionTab> {
       final meal = result.meal;
       if (meal == null) {
         setState(() => _analyzing = false);
-        _snack('Gemini did not return a parsable [DATA] block — add it manually.');
+        _snack(s.geminiNoDataBlock);
         return;
       }
 
-      await widget.service.addMeal(meal);
-      final meals = await widget.service.fetchMeals(day);
+      await widget.state.service.addMeal(meal);
+      final meals = await widget.state.service.fetchMeals(day);
       if (!mounted) return;
       setState(() {
         // Guard against the user having switched days mid-flight.
@@ -204,23 +211,24 @@ class _NutritionTabState extends State<NutritionTab> {
         _describeCtrl.clear();
         _image = null;
       });
-      _snack('Logged "${meal.name}" · ${meal.calories.round()} kcal.');
+      _snack(s.mealLogged(meal.name, meal.calories.round()));
     } catch (e) {
       if (!mounted) return;
       setState(() => _analyzing = false);
-      _snack('Analysis failed: $e');
+      _snack(s.analysisFailed('$e'));
     }
   }
 
   Future<void> _addManual(Meal meal) async {
-    await widget.service.addMeal(meal);
-    final meals = await widget.service.fetchMeals(_selected);
+    await widget.state.service.addMeal(meal);
+    final meals = await widget.state.service.fetchMeals(_selected);
     if (!mounted) return;
     setState(() => _meals = meals);
   }
 
   Future<void> _clearDay() async {
-    final label = DateFormat('MMMM d').format(_selected);
+    final s = context.s;
+    final label = DateFormat('MMMM d', s.locale.code).format(_selected);
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -228,31 +236,30 @@ class _NutritionTabState extends State<NutritionTab> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.card),
         ),
-        title: const Text("Clear this day's log?"),
+        title: Text(s.clearDayTitle),
         content: Text(
-          'This permanently deletes all ${_meals.length} meals logged on '
-          '$label. Other days are untouched. This cannot be undone.',
+          s.clearDayBody(_meals.length, label),
           style: const TextStyle(color: AppColors.textMid, height: 1.5),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(s.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
             style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('Delete'),
+            child: Text(s.delete),
           ),
         ],
       ),
     );
     if (ok != true) return;
 
-    await widget.service.clearDay(_selected);
+    await widget.state.service.clearDay(_selected);
     if (!mounted) return;
     setState(() => _meals = const []);
-    _snack('Cleared $label.');
+    _snack(s.dayCleared(label));
   }
 
   void _snack(String msg) {
@@ -261,13 +268,14 @@ class _NutritionTabState extends State<NutritionTab> {
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  static String _fmt(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
+    // Subscribes this tab to the profile: a bodyweight edit, or a language
+    // switch made over in Settings, rebuilds the targets and the copy here.
+    final profile = context.app.profile;
     final totals = MacroTotals.of(_meals);
-    final targets = _profile.targets;
+    final targets = profile.targets;
 
     return AdaptiveColumns(
       onRefresh: _load,
@@ -279,10 +287,9 @@ class _NutritionTabState extends State<NutritionTab> {
         if (!_isToday)
           ui.Banner(
             icon: Icons.history,
-            title:
-                'Viewing History: ${DateFormat('MMMM d, y').format(_selected)}',
-            message:
-                'Anything you log now is recorded against this date, not today.',
+            title: s.viewingHistory(
+                DateFormat('MMMM d, y', s.locale.code).format(_selected)),
+            message: s.viewingHistoryBody,
             color: AppColors.warning,
             tint: AppColors.warningTint,
             action: FilledButton.tonal(
@@ -292,23 +299,25 @@ class _NutritionTabState extends State<NutritionTab> {
                 foregroundColor: AppColors.onAccent,
                 minimumSize: const Size(0, 40),
               ),
-              child: const Text('Back to today'),
+              child: Text(s.backToToday),
             ),
           ),
         _GoalsCard(
           weightCtrl: _weightCtrl,
           heightCtrl: _heightCtrl,
           ageCtrl: _ageCtrl,
-          profile: _profile,
+          profile: profile,
           onWeight: (w) => _saveProfile(weight: w),
           onHeight: (h) => _saveProfile(height: h),
           onAge: (a) => _saveProfile(age: a),
+          onGender: (g) => _saveProfile(gender: g),
           onGoal: (g) => _saveProfile(goal: g),
           onActivity: (a) => _saveProfile(activity: a),
         ),
         _RingsCard(
-          title:
-              _isToday ? 'Today' : DateFormat('EEEE, MMM d').format(_selected),
+          title: _isToday
+              ? s.today
+              : DateFormat('EEEE, MMM d', s.locale.code).format(_selected),
           loading: _loading,
           totals: totals,
           targets: targets,
@@ -330,8 +339,8 @@ class _NutritionTabState extends State<NutritionTab> {
           onClearDay: _meals.isEmpty ? null : _clearDay,
           onDelete: (m) async {
             if (m.id == null) return;
-            await widget.service.deleteMeal(m.id!);
-            final meals = await widget.service.fetchMeals(_selected);
+            await widget.state.service.deleteMeal(m.id!);
+            final meals = await widget.state.service.fetchMeals(_selected);
             if (!mounted) return;
             setState(() => _meals = meals);
           },
@@ -341,6 +350,7 @@ class _NutritionTabState extends State<NutritionTab> {
   }
 
   void _openManualSheet(BuildContext context) {
+    final state = widget.state;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -348,12 +358,17 @@ class _NutritionTabState extends State<NutritionTab> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _ManualMealSheet(
-        day: _selected,
-        onSubmit: (meal) async {
-          Navigator.pop(context);
-          await _addManual(meal);
-        },
+      // A sheet is its own route, so the scope has to be re-established for
+      // context.s to resolve inside it.
+      builder: (context) => AppScope(
+        state: state,
+        child: _ManualMealSheet(
+          day: _selected,
+          onSubmit: (meal) async {
+            Navigator.pop(context);
+            await _addManual(meal);
+          },
+        ),
       ),
     );
   }
@@ -370,6 +385,7 @@ class _GoalsCard extends StatelessWidget {
     required this.onWeight,
     required this.onHeight,
     required this.onAge,
+    required this.onGender,
     required this.onGoal,
     required this.onActivity,
   });
@@ -381,15 +397,17 @@ class _GoalsCard extends StatelessWidget {
   final ValueChanged<double> onWeight;
   final ValueChanged<double> onHeight;
   final ValueChanged<int> onAge;
+  final ValueChanged<Gender> onGender;
   final ValueChanged<Goal> onGoal;
   final ValueChanged<ActivityLevel> onActivity;
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
     final t = profile.targets;
 
     return ui.SectionCard(
-      title: 'Daily targets',
+      title: s.dailyTargets,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -398,8 +416,8 @@ class _GoalsCard extends StatelessWidget {
               Expanded(
                 child: _MeasureField(
                   controller: weightCtrl,
-                  label: 'Bodyweight',
-                  suffix: 'kg',
+                  label: s.bodyweight,
+                  suffix: s.unitKg,
                   current: profile.weightKg,
                   onCommit: onWeight,
                 ),
@@ -408,8 +426,8 @@ class _GoalsCard extends StatelessWidget {
               Expanded(
                 child: _MeasureField(
                   controller: heightCtrl,
-                  label: 'Height',
-                  suffix: 'cm',
+                  label: s.height,
+                  suffix: s.unitCm,
                   current: profile.heightCm,
                   onCommit: onHeight,
                 ),
@@ -418,8 +436,8 @@ class _GoalsCard extends StatelessWidget {
               Expanded(
                 child: _MeasureField(
                   controller: ageCtrl,
-                  label: 'Age',
-                  suffix: 'y',
+                  label: s.age,
+                  suffix: s.unitYears,
                   decimal: false,
                   current: profile.age.toDouble(),
                   onCommit: (v) => onAge(v.round()),
@@ -427,17 +445,31 @@ class _GoalsCard extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          // Above the activity level, because it belongs with the body metrics
+          // it is measured with: gender picks which Mifflin-St Jeor equation
+          // the BMR line below is computed from, so a change here visibly moves
+          // every number in this card.
+          Text(
+            s.gender,
+            style: const TextStyle(fontSize: 12, color: AppColors.textLow),
+          ),
+          const SizedBox(height: 6),
+          ui.GenderToggle(
+            gender: profile.gender,
+            onChanged: onGender,
+          ),
           const SizedBox(height: 12),
           DropdownButtonFormField<ActivityLevel>(
             initialValue: profile.activity,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Activity level'),
+            decoration: InputDecoration(labelText: s.activityLevel),
             items: [
               for (final a in ActivityLevel.values)
                 DropdownMenuItem(
                   value: a,
                   child: Text(
-                    '${a.label} · ${a.description}',
+                    '${s.activityLabel(a)} · ${s.activityDescription(a)}',
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -448,12 +480,12 @@ class _GoalsCard extends StatelessWidget {
           DropdownButtonFormField<Goal>(
             initialValue: profile.goal,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Goal'),
+            decoration: InputDecoration(labelText: s.goal),
             items: [
               for (final g in Goal.values)
                 DropdownMenuItem(
                   value: g,
-                  child: Text('${g.label} · ${g.deltaLabel}'),
+                  child: Text('${s.goalLabel(g)} · ${s.goalDelta(g)}'),
                 ),
             ],
             onChanged: (g) => g == null ? null : onGoal(g),
@@ -463,8 +495,12 @@ class _GoalsCard extends StatelessWidget {
           // target moved because his weight moved, not because the app guessed.
           const SizedBox(height: 14),
           Text(
-            'BMR ${t.bmr.round()} kcal  ×${profile.activity.multiplier} '
-            '(${profile.activity.label})  =  TDEE ${t.tdee.round()} kcal',
+            s.bmrLine(
+              t.bmr.round(),
+              profile.activity.multiplier,
+              s.activityLabel(profile.activity),
+              t.tdee.round(),
+            ),
             style: const TextStyle(fontSize: 11, color: AppColors.textLow),
           ),
 
@@ -474,8 +510,8 @@ class _GoalsCard extends StatelessWidget {
               Expanded(
                 child: _TargetTile(
                   value: '${t.kcal}',
-                  unit: 'kcal',
-                  detail: 'TDEE · ${profile.goal.deltaLabel}',
+                  unit: s.unitKcal,
+                  detail: s.tdeeAnd(s.goalDelta(profile.goal)),
                   color: AppColors.accent,
                 ),
               ),
@@ -483,8 +519,8 @@ class _GoalsCard extends StatelessWidget {
               Expanded(
                 child: _TargetTile(
                   value: '${t.protein}',
-                  unit: 'g protein',
-                  detail: '2.0 g × ${_fmt(profile.weightKg)} kg',
+                  unit: s.gProtein,
+                  detail: s.proteinPerKg(ui.fmtKg(profile.weightKg)),
                   color: AppColors.success,
                 ),
               ),
@@ -496,8 +532,8 @@ class _GoalsCard extends StatelessWidget {
               Expanded(
                 child: _TargetTile(
                   value: '${t.carbs}',
-                  unit: 'g carbs',
-                  detail: 'remaining calories',
+                  unit: s.gCarbs,
+                  detail: s.remainingCalories,
                   color: AppColors.carbs,
                 ),
               ),
@@ -505,8 +541,8 @@ class _GoalsCard extends StatelessWidget {
               Expanded(
                 child: _TargetTile(
                   value: '${t.fats}',
-                  unit: 'g fats',
-                  detail: '25% of ${t.kcal} kcal',
+                  unit: s.gFats,
+                  detail: s.fatsShare(t.kcal),
                   color: AppColors.fats,
                 ),
               ),
@@ -516,9 +552,6 @@ class _GoalsCard extends StatelessWidget {
       ),
     );
   }
-
-  static String _fmt(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
 }
 
 /// A numeric profile field that commits on submit and on tap-away, and only
@@ -600,9 +633,13 @@ class _TargetTile extends StatelessWidget {
                         color: color,
                         height: 1)),
                 const SizedBox(width: 4),
-                Text(unit,
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textLow)),
+                Expanded(
+                  child: Text(unit,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          fontSize: 12, color: AppColors.textLow)),
+                ),
               ],
             ),
             const SizedBox(height: 4),
@@ -640,6 +677,8 @@ class _RingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
+
     return ui.SectionCard(
       title: title,
       child: loading
@@ -657,34 +696,34 @@ class _RingsCard extends StatelessWidget {
 
                 final rings = <Widget>[
                   ui.MacroRing(
-                    label: 'Calories',
+                    label: s.calories,
                     value: totals.calories,
                     target: targets.kcal,
-                    unit: 'kcal',
+                    unit: s.unitKcal,
                     color: AppColors.accent,
                     size: size,
                   ),
                   ui.MacroRing(
-                    label: 'Protein',
+                    label: s.protein,
                     value: totals.protein,
                     target: targets.protein,
-                    unit: 'g',
+                    unit: s.unitGrams,
                     color: AppColors.success,
                     size: size,
                   ),
                   ui.MacroRing(
-                    label: 'Carbs',
+                    label: s.carbs,
                     value: totals.carbs,
                     target: targets.carbs,
-                    unit: 'g',
+                    unit: s.unitGrams,
                     color: AppColors.carbs,
                     size: size,
                   ),
                   ui.MacroRing(
-                    label: 'Fats',
+                    label: s.fats,
                     value: totals.fats,
                     target: targets.fats,
-                    unit: 'g',
+                    unit: s.unitGrams,
                     color: AppColors.fats,
                     size: size,
                   ),
@@ -727,8 +766,10 @@ class _AnalyzeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
+
     return ui.SectionCard(
-      title: 'Analyze a meal',
+      title: s.analyzeMeal,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -737,9 +778,10 @@ class _AnalyzeCard extends StatelessWidget {
             maxLines: 3,
             minLines: 2,
             enabled: !analyzing,
-            decoration: const InputDecoration(
-              hintText: 'e.g. 200 g chicken breast, 150 g rice, olive oil…',
-              hintStyle: TextStyle(color: AppColors.textLow, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: s.describeHint,
+              hintStyle:
+                  const TextStyle(color: AppColors.textLow, fontSize: 13),
             ),
           ),
           const SizedBox(height: 12),
@@ -780,7 +822,7 @@ class _AnalyzeCard extends StatelessWidget {
                   onPressed:
                       analyzing ? null : () => onPick(ImageSource.gallery),
                   icon: const Icon(Icons.image_outlined, size: 18),
-                  label: const Text('Upload'),
+                  label: Text(s.upload, overflow: TextOverflow.ellipsis),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 44),
                     foregroundColor: AppColors.textMid,
@@ -794,7 +836,7 @@ class _AnalyzeCard extends StatelessWidget {
                   onPressed:
                       analyzing ? null : () => onPick(ImageSource.camera),
                   icon: const Icon(Icons.photo_camera_outlined, size: 18),
-                  label: const Text('Camera'),
+                  label: Text(s.camera, overflow: TextOverflow.ellipsis),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 44),
                     foregroundColor: AppColors.textMid,
@@ -818,7 +860,7 @@ class _AnalyzeCard extends StatelessWidget {
                           strokeWidth: 2, color: AppColors.onAccent),
                     )
                   : const Icon(Icons.auto_awesome, size: 18),
-              label: Text(analyzing ? 'Analyzing…' : 'Analyze food'),
+              label: Text(analyzing ? s.analyzing : s.analyzeFood),
             ),
           ),
 
@@ -845,7 +887,7 @@ class _AnalyzeCard extends StatelessWidget {
             child: TextButton.icon(
               onPressed: analyzing ? null : onManual,
               icon: const Icon(Icons.edit_outlined, size: 16),
-              label: const Text('Add manually instead'),
+              label: Text(s.addManually),
               style: TextButton.styleFrom(foregroundColor: AppColors.textMid),
             ),
           ),
@@ -868,8 +910,10 @@ class _MealsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
+
     return ui.SectionCard(
-      title: 'Meals logged',
+      title: s.mealsLogged,
       trailing: onClearDay == null
           ? null
           : TextButton(
@@ -879,14 +923,15 @@ class _MealsCard extends StatelessWidget {
                 minimumSize: const Size(0, 30),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
-              child: const Text("Clear day's log",
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              child: Text(s.clearDaysLog,
+                  style: const TextStyle(
+                      fontSize: 12, fontWeight: FontWeight.w600)),
             ),
       child: meals.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16),
-              child: Text('Nothing logged on this day.',
-                  style: TextStyle(color: AppColors.textLow)),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(s.nothingLogged,
+                  style: const TextStyle(color: AppColors.textLow)),
             )
           : Column(
               children: [
@@ -907,8 +952,7 @@ class _MealsCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '${meals[i].summary} · '
-                              '${meals[i].carbs.round()} C / ${meals[i].fats.round()} F',
+                              _mealSummary(s, meals[i]),
                               style: const TextStyle(
                                   fontSize: 12, color: AppColors.textLow),
                             ),
@@ -919,7 +963,7 @@ class _MealsCard extends StatelessWidget {
                         onPressed: () => onDelete(meals[i]),
                         icon: const Icon(Icons.delete_outline, size: 18),
                         color: AppColors.textLow,
-                        tooltip: 'Delete',
+                        tooltip: s.delete,
                       ),
                     ],
                   ),
@@ -928,6 +972,13 @@ class _MealsCard extends StatelessWidget {
             ),
     );
   }
+
+  /// e.g. `775 kcal · 77 g protein · 94 C / 9 F`. Built here rather than on the
+  /// model: it is display text, and every unit in it is translated.
+  static String _mealSummary(AppStrings s, Meal m) =>
+      '${m.calories.round()} ${s.unitKcal} · '
+      '${m.protein.round()} ${s.gProtein} · '
+      '${m.carbs.round()} ${s.carbsInitial} / ${m.fats.round()} ${s.fatsInitial}';
 }
 
 /// Manual fallback, for when Gemini is unreachable or its [DATA] block is
@@ -964,8 +1015,8 @@ class _ManualMealSheetState extends State<_ManualMealSheet> {
     final kcal = double.tryParse(_kcal.text.replaceAll(',', '.'));
     final protein = double.tryParse(_protein.text.replaceAll(',', '.'));
     if (name.isEmpty || kcal == null || protein == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('Name, calories and protein are required.'),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(context.s.mealFieldsRequired),
       ));
       return;
     }
@@ -981,6 +1032,8 @@ class _ManualMealSheetState extends State<_ManualMealSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
+
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -993,7 +1046,8 @@ class _ManualMealSheetState extends State<_ManualMealSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Add meal · ${DateFormat('MMMM d').format(widget.day)}',
+            s.addMealOn(
+                DateFormat('MMMM d', s.locale.code).format(widget.day)),
             style: const TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
@@ -1002,28 +1056,28 @@ class _ManualMealSheetState extends State<_ManualMealSheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Meal name'),
+            decoration: InputDecoration(labelText: s.mealName),
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _num(_kcal, 'Calories', 'kcal')),
+              Expanded(child: _num(_kcal, s.calories, s.unitKcal)),
               const SizedBox(width: 10),
-              Expanded(child: _num(_protein, 'Protein', 'g')),
+              Expanded(child: _num(_protein, s.protein, s.unitGrams)),
             ],
           ),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: _num(_carbs, 'Carbs', 'g')),
+              Expanded(child: _num(_carbs, s.carbs, s.unitGrams)),
               const SizedBox(width: 10),
-              Expanded(child: _num(_fats, 'Fats', 'g')),
+              Expanded(child: _num(_fats, s.fats, s.unitGrams)),
             ],
           ),
           const SizedBox(height: 18),
           SizedBox(
             width: double.infinity,
-            child: FilledButton(onPressed: _submit, child: const Text('Add meal')),
+            child: FilledButton(onPressed: _submit, child: Text(s.addMeal)),
           ),
         ],
       ),

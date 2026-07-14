@@ -31,7 +31,9 @@ class Workout {
   /// Epley estimate. Only meaningful for a completed set.
   double get estimated1rm => Progression.estimated1rm(weight, reps);
 
-  String get summary => '${_g(weight)} kg x $reps x $sets';
+  /// e.g. `70 kg × 5 × 3`. The unit is passed in rather than baked in — this
+  /// string is read by a user, and the user picks the language.
+  String summary(String unitKg) => '${_g(weight)} $unitKg × $reps × $sets';
 
   factory Workout.fromJson(Map<String, dynamic> json) => Workout(
         id: json['id'] as String?,

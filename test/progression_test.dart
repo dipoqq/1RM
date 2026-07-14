@@ -128,13 +128,16 @@ void main() {
   });
 
   group('targets', () {
-    // The reference lifter: 94 kg, 180 cm, 30 y.
+    // The reference lifter: male, 94 kg, 180 cm, 30 y.
     //   BMR  = 10(94) + 6.25(180) - 5(30) + 5 = 1920 kcal
     //   TDEE = 1920 × 1.55 (moderately active)  = 2976 kcal
-    Targets forGoal(Goal goal, {ActivityLevel? activity}) => targetsFor(
+    Targets forGoal(Goal goal,
+            {ActivityLevel? activity, Gender gender = Gender.male}) =>
+        targetsFor(
           weightKg: 94,
           heightCm: 180,
           age: 30,
+          gender: gender,
           goal: goal,
           activity: activity ?? ActivityLevel.moderatelyActive,
         );
@@ -151,6 +154,20 @@ void main() {
           closeTo(1920 * 1.375, 0.01));
       expect(forGoal(Goal.maintenance, activity: ActivityLevel.veryActive).tdee,
           closeTo(1920 * 1.725, 0.01));
+    });
+
+    test('gender picks the Mifflin-St Jeor constant', () {
+      // Same body, the other equation: 1920 - 5 - 161 = 1754 kcal. The 166 kcal
+      // gap is what the male-only formula was charging every female lifter.
+      final female = forGoal(Goal.maintenance, gender: Gender.female);
+      expect(female.bmr, closeTo(1754, 0.01));
+      expect(female.tdee, closeTo(1754 * 1.55, 0.01));
+      expect(female.kcal, lessThan(forGoal(Goal.maintenance).kcal));
+
+      // Protein is bodyweight-driven, so it does NOT move with gender; the
+      // calorie-driven macros do.
+      expect(female.protein, forGoal(Goal.maintenance).protein);
+      expect(female.fats, lessThan(forGoal(Goal.maintenance).fats));
     });
 
     test('the goal shifts TDEE by its delta', () {
@@ -181,10 +198,25 @@ void main() {
         weightKg: 200,
         heightCm: 150,
         age: 80,
+        gender: Gender.male,
         goal: Goal.cut,
         activity: ActivityLevel.sedentary,
       );
       expect(t.carbs, greaterThanOrEqualTo(0));
+
+      // The female constant takes another 166 kcal off the same budget, which
+      // is the harshest case the clamp has to survive.
+      expect(
+        targetsFor(
+          weightKg: 200,
+          heightCm: 150,
+          age: 80,
+          gender: Gender.female,
+          goal: Goal.cut,
+          activity: ActivityLevel.sedentary,
+        ).carbs,
+        greaterThanOrEqualTo(0),
+      );
     });
   });
 

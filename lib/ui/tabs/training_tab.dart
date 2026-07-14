@@ -3,10 +3,12 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/constants.dart';
+import '../../core/l10n/app_strings.dart';
 import '../../core/progression.dart';
 import '../../core/theme.dart';
+import '../../models/profile.dart';
 import '../../models/workout.dart';
-import '../../services/supabase_service.dart';
+import '../../state/app_state.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart' as ui;
 import '../widgets/confetti.dart';
@@ -14,11 +16,11 @@ import '../widgets/confetti.dart';
 class TrainingTab extends StatefulWidget {
   const TrainingTab({
     super.key,
-    required this.service,
+    required this.state,
     required this.confetti,
   });
 
-  final SupabaseService service;
+  final AppState state;
   final ConfettiController confetti;
 
   @override
@@ -39,6 +41,11 @@ class _TrainingTabState extends State<TrainingTab> {
 
   /// Working weight the warm-up calculator is currently ramping to.
   double _working = 60;
+
+  /// Which quote is on screen. Held here, and re-rolled only in [_load], so the
+  /// card is stable across rebuilds — a language switch re-renders the SAME
+  /// quote, translated, instead of dealing a new one.
+  double _quote = ui.QuoteCard.roll();
 
   @override
   void initState() {
@@ -64,18 +71,20 @@ class _TrainingTabState extends State<TrainingTab> {
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
-      final history = await widget.service.fetchWorkouts();
+      final history = await widget.state.service.fetchWorkouts();
       if (!mounted) return;
       setState(() {
         _history = history;
         _loading = false;
         _error = null;
+        // A refresh is the one moment the lifter asked for a new quote.
+        _quote = ui.QuoteCard.roll();
       });
       // Seed the calculator with the recommended weight — already deloaded 10%
       // if the plateau detector has fired.
       final rec = history.recommendedWorkingWeight;
       if (rec != null && _weightCtrl.text.isEmpty) {
-        _weightCtrl.text = _fmt(rec);
+        _weightCtrl.text = ui.fmtKg(rec);
       }
     } catch (e) {
       if (!mounted) return;
@@ -87,18 +96,19 @@ class _TrainingTabState extends State<TrainingTab> {
   }
 
   Future<void> _log() async {
+    final s = context.s;
     final weight = double.tryParse(_weightCtrl.text.replaceAll(',', '.'));
     final reps = int.tryParse(_repsCtrl.text);
     final sets = int.tryParse(_setsCtrl.text);
     if (weight == null || weight <= 0 || reps == null || reps <= 0 ||
         sets == null || sets <= 0) {
-      _snack('Enter a weight, reps and sets greater than zero.');
+      _snack(s.enterPositiveNumbers);
       return;
     }
 
     setState(() => _saving = true);
     try {
-      await widget.service.addWorkout(Workout(
+      await widget.state.service.addWorkout(Workout(
         date: DateTime.now(),
         workoutType: _type,
         weight: weight,
@@ -107,7 +117,7 @@ class _TrainingTabState extends State<TrainingTab> {
         completed: _completed,
       ));
 
-      final history = await widget.service.fetchWorkouts();
+      final history = await widget.state.service.fetchWorkouts();
       if (!mounted) return;
       setState(() {
         _history = history;
@@ -115,38 +125,41 @@ class _TrainingTabState extends State<TrainingTab> {
       });
 
       await _celebrateIfMilestone(history);
-      if (mounted) _snack('Session logged.');
+      if (mounted) _snack(s.sessionLogged);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      _snack('Could not save: $e');
+      _snack(s.couldNotSave('$e'));
     }
   }
 
   /// Fire confetti the moment a completed session pushes the best 1RM past a
   /// milestone that has never been celebrated.
   ///
-  /// The claim is made in the database first: if this milestone was already
-  /// banked (e.g. the 80 kg in your existing workout_data.json, or a session
-  /// logged on your phone), claimMilestone returns false and nothing fires.
+  /// The milestones are the lifter's own: the fixed 80 kg rubicon plus whatever
+  /// bench goal they set in Settings. The claim is made in the database first —
+  /// if this milestone was already banked (e.g. the 80 kg in your existing
+  /// workout_data.json, or a session logged on your phone), claimMilestone
+  /// returns false and nothing fires.
   Future<void> _celebrateIfMilestone(WorkoutHistory history) async {
     final best = history.bestEstimated1rm;
     if (best == null) return;
 
     // Highest cleared milestone first, so one monster session that clears both
-    // celebrates 95 kg rather than 80 kg.
-    for (final m in kMilestones.reversed) {
+    // celebrates the goal rather than the 80 kg on the way to it.
+    for (final m in widget.state.profile.milestones.reversed) {
       if (best < m.kg) continue;
-      final claimed = await widget.service.claimMilestone(m.kg);
+      final claimed = await widget.state.claimMilestone(m.kg);
       if (!claimed) continue;
       if (!mounted) return;
       widget.confetti.fire();
-      _showMilestoneDialog(m.title, m.subtitle, best);
+      _showMilestoneDialog(m, best);
       return;
     }
   }
 
-  void _showMilestoneDialog(String title, String subtitle, double best) {
+  void _showMilestoneDialog(Milestone milestone, double best) {
+    final s = context.s;
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
@@ -154,17 +167,20 @@ class _TrainingTabState extends State<TrainingTab> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.card),
         ),
-        title: Text(title,
-            style: const TextStyle(
-                fontWeight: FontWeight.w800, color: AppColors.accent)),
+        title: Text(
+          s.milestoneTitle(ui.fmtKg(milestone.kg)),
+          style: const TextStyle(
+              fontWeight: FontWeight.w800, color: AppColors.accent),
+        ),
         content: Text(
-          '$subtitle\n\nEstimated 1RM: ${best.toStringAsFixed(1)} kg.',
+          '${s.milestoneSubtitle(milestone.isFinal)}\n\n'
+          '${s.milestoneBody(best.toStringAsFixed(1))}',
           style: const TextStyle(color: AppColors.textMid, height: 1.5),
         ),
         actions: [
           FilledButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Back to work'),
+            child: Text(s.backToWork),
           ),
         ],
       ),
@@ -177,9 +193,6 @@ class _TrainingTabState extends State<TrainingTab> {
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  static String _fmt(double v) =>
-      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
-
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -189,12 +202,15 @@ class _TrainingTabState extends State<TrainingTab> {
       return _ErrorState(message: _error!, onRetry: _load);
     }
 
-    final best = _history.bestEstimated1rm;
+    // The goal comes from the profile, so editing it in Settings rebuilds this
+    // card — bar, remaining kilos and percentage together — with no refetch.
+    final progress =
+        context.app.profile.benchProgress(_history.bestEstimated1rm);
 
     return AdaptiveColumns(
       onRefresh: _load,
       primary: [
-        ui.QuoteCard(),
+        ui.QuoteCard(pick: _quote),
         if (_history.plateauDetected)
           _PlateauBanner(
             streak: _history.failedHeavyStreak,
@@ -202,10 +218,10 @@ class _TrainingTabState extends State<TrainingTab> {
             to: _history.recommendedWorkingWeight ?? 0,
             onApply: () {
               final rec = _history.recommendedWorkingWeight;
-              if (rec != null) _weightCtrl.text = _fmt(rec);
+              if (rec != null) _weightCtrl.text = ui.fmtKg(rec);
             },
           ),
-        _StatsRow(history: _history, best: best),
+        _StatsRow(history: _history, progress: progress),
         _LogCard(
           weightCtrl: _weightCtrl,
           repsCtrl: _repsCtrl,
@@ -224,7 +240,7 @@ class _TrainingTabState extends State<TrainingTab> {
           history: _history,
           onDelete: (w) async {
             if (w.id == null) return;
-            await widget.service.deleteWorkout(w.id!);
+            await widget.state.service.deleteWorkout(w.id!);
             await _load();
           },
         ),
@@ -250,13 +266,12 @@ class _PlateauBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
+
     return ui.Banner(
       icon: Icons.warning_amber_rounded,
-      title: 'Plateau detected — deload block forced',
-      message: '$streak consecutive heavy days failed. Grinding the same weight '
-          'from here buys nothing but an injury. Drop 10% to '
-          '${_TrainingTabState._fmt(to)} kg (from ${_TrainingTabState._fmt(from)} kg), '
-          'rebuild momentum, then climb again.',
+      title: s.plateauTitle,
+      message: s.plateauMessage(streak, ui.fmtKg(from), ui.fmtKg(to)),
       color: AppColors.warning,
       tint: AppColors.warningTint,
       action: FilledButton.tonal(
@@ -266,25 +281,33 @@ class _PlateauBanner extends StatelessWidget {
           foregroundColor: AppColors.onAccent,
           minimumSize: const Size(0, 40),
         ),
-        child: Text('Load ${_TrainingTabState._fmt(to)} kg'),
+        child: Text(s.loadWeight(ui.fmtKg(to))),
       ),
     );
   }
 }
 
+/// Estimated 1RM against the lifter's own bench press goal: the number, a bar,
+/// the completion percentage and the kilos still to add. Every one of those
+/// four comes from the same [BenchProgress], so they cannot contradict each
+/// other when the goal changes.
 class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.history, required this.best});
+  const _StatsRow({required this.history, required this.progress});
 
   final WorkoutHistory history;
-  final double? best;
+  final BenchProgress progress;
 
   @override
   Widget build(BuildContext context) {
-    final b = best ?? 0;
-    final progress = (b / kGoalKg).clamp(0.0, 1.0);
+    final s = context.s;
+    final goalKg = ui.fmtKg(progress.goalKg);
 
     return ui.SectionCard(
-      title: 'Estimated 1RM (Epley)',
+      title: s.estimated1rm,
+      trailing: _Chip(
+        label: s.percentOfGoal(progress.percent),
+        color: progress.cleared ? AppColors.success : AppColors.accentDim,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -293,7 +316,9 @@ class _StatsRow extends StatelessWidget {
             textBaseline: TextBaseline.alphabetic,
             children: [
               Text(
-                best == null ? '—' : b.toStringAsFixed(1),
+                progress.best == null
+                    ? '—'
+                    : progress.best!.toStringAsFixed(1),
                 style: const TextStyle(
                   fontSize: 40,
                   fontWeight: FontWeight.w800,
@@ -302,11 +327,12 @@ class _StatsRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 6),
-              const Text('kg',
-                  style: TextStyle(fontSize: 16, color: AppColors.textLow)),
+              Text('/ $goalKg ${s.unitKg}',
+                  style:
+                      const TextStyle(fontSize: 16, color: AppColors.textLow)),
               const Spacer(),
               _Chip(
-                label: '${history.weeksCompleted} weeks',
+                label: s.weeksCompleted(history.weeksCompleted),
                 color: AppColors.textMid,
               ),
             ],
@@ -314,25 +340,33 @@ class _StatsRow extends StatelessWidget {
           const SizedBox(height: 14),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 8,
-              backgroundColor: AppColors.border,
-              valueColor: AlwaysStoppedAnimation(
-                b >= kGoalKg
-                    ? AppColors.success
-                    : b >= kMilestoneKg
-                        ? AppColors.accent
-                        : AppColors.accentDim,
+            child: TweenAnimationBuilder<double>(
+              // Animated so that raising the goal in Settings visibly *drains*
+              // the bar rather than teleporting it.
+              tween: Tween(begin: 0, end: progress.ratio),
+              duration: const Duration(milliseconds: 550),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, _) => LinearProgressIndicator(
+                value: value,
+                minHeight: 8,
+                backgroundColor: AppColors.border,
+                valueColor: AlwaysStoppedAnimation(
+                  progress.cleared
+                      ? AppColors.success
+                      // Thresholds are fractions of the lifter's own goal, not
+                      // a hardcoded 80 kg: a 75 kg goal has no "80 kg" stage.
+                      : progress.ratio >= 0.85
+                          ? AppColors.accent
+                          : AppColors.accentDim,
+                ),
               ),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            b >= kGoalKg
-                ? 'Goal cleared — ${kGoalKg.toStringAsFixed(0)} kg is behind you.'
-                : '${(kGoalKg - b).toStringAsFixed(1)} kg to the '
-                    '${kGoalKg.toStringAsFixed(0)} kg goal.',
+            progress.cleared
+                ? s.goalCleared(goalKg)
+                : s.remainingToGoal(ui.fmtKg(progress.remainingKg), goalKg),
             style: const TextStyle(fontSize: 12, color: AppColors.textLow),
           ),
         ],
@@ -386,16 +420,21 @@ class _LogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
+
     return ui.SectionCard(
-      title: 'Log a session',
+      title: s.logSession,
       child: Column(
         children: [
           DropdownButtonFormField<String>(
             initialValue: type,
-            decoration: const InputDecoration(labelText: 'Workout type'),
+            isExpanded: true,
+            decoration: InputDecoration(labelText: s.workoutTypeField),
             items: [
+              // The VALUE stays the English string the database stores; only
+              // the label is translated.
               for (final t in WorkoutType.all)
-                DropdownMenuItem(value: t, child: Text(t)),
+                DropdownMenuItem(value: t, child: Text(s.workoutType(t))),
             ],
             onChanged: (v) => v == null ? null : onType(v),
           ),
@@ -411,8 +450,8 @@ class _LogCard extends StatelessWidget {
                   inputFormatters: [
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
                   ],
-                  decoration: const InputDecoration(
-                      labelText: 'Weight', suffixText: 'kg'),
+                  decoration: InputDecoration(
+                      labelText: s.weight, suffixText: s.unitKg),
                 ),
               ),
               const SizedBox(width: 10),
@@ -421,7 +460,7 @@ class _LogCard extends StatelessWidget {
                   controller: repsCtrl,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(labelText: 'Reps'),
+                  decoration: InputDecoration(labelText: s.reps),
                 ),
               ),
               const SizedBox(width: 10),
@@ -430,7 +469,7 @@ class _LogCard extends StatelessWidget {
                   controller: setsCtrl,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(labelText: 'Sets'),
+                  decoration: InputDecoration(labelText: s.sets),
                 ),
               ),
             ],
@@ -442,16 +481,17 @@ class _LogCard extends StatelessWidget {
             contentPadding: EdgeInsets.zero,
             activeThumbColor: AppColors.success,
             title: Text(
-              completed ? 'All sets completed' : 'Failed / missed reps',
+              completed ? s.allSetsCompleted : s.failedReps,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: completed ? AppColors.success : AppColors.danger,
               ),
             ),
-            subtitle: const Text(
-              'Failed heavy days drive the plateau detector.',
-              style: TextStyle(fontSize: 12, color: AppColors.textLow),
+            subtitle: Text(
+              s.failedDrivePlateau,
+              style:
+                  const TextStyle(fontSize: 12, color: AppColors.textLow),
             ),
           ),
           const SizedBox(height: 6),
@@ -466,7 +506,7 @@ class _LogCard extends StatelessWidget {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: AppColors.onAccent),
                     )
-                  : const Text('Log session'),
+                  : Text(s.logSessionButton),
             ),
           ),
         ],
@@ -482,6 +522,7 @@ class _WarmupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
     final sets = Progression.warmup(working);
     const accents = [
       AppColors.textMid,
@@ -491,9 +532,9 @@ class _WarmupCard extends StatelessWidget {
     ];
 
     return ui.SectionCard(
-      title: 'Warm-up ramp',
+      title: s.warmupRamp,
       trailing: Text(
-        'to ${_TrainingTabState._fmt(working)} kg',
+        s.warmupTo(ui.fmtKg(working)),
         style: const TextStyle(
             fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMid),
       ),
@@ -513,9 +554,9 @@ class _WarmupCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 SizedBox(
-                  width: 74,
+                  width: 92,
                   child: Text(
-                    sets[i].label,
+                    s.warmupLabel(sets[i].stage),
                     style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
@@ -524,13 +565,14 @@ class _WarmupCard extends StatelessWidget {
                 ),
                 Expanded(
                   child: Text(
-                    sets[i].purpose,
+                    s.warmupPurpose(sets[i].stage),
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.textLow),
                   ),
                 ),
+                const SizedBox(width: 8),
                 Text(
-                  '${_TrainingTabState._fmt(sets[i].weight)} kg × ${sets[i].reps}',
+                  '${ui.fmtKg(sets[i].weight)} ${s.unitKg} × ${sets[i].reps}',
                   style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
@@ -540,10 +582,9 @@ class _WarmupCard extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 12),
-          const Text(
-            'Every load is snapped to a real 2.5 kg increment and floored at '
-            'the empty 20 kg bar.',
-            style: TextStyle(fontSize: 11, color: AppColors.textLow),
+          Text(
+            s.warmupFootnote,
+            style: const TextStyle(fontSize: 11, color: AppColors.textLow),
           ),
         ],
       ),
@@ -559,15 +600,16 @@ class _HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final s = context.s;
     final recent = history.all.take(8).toList();
 
     return ui.SectionCard(
-      title: 'Recent sessions',
+      title: s.recentSessions,
       child: recent.isEmpty
-          ? const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Text('No sessions logged yet.',
-                  style: TextStyle(color: AppColors.textLow)),
+          ? Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(s.noSessions,
+                  style: const TextStyle(color: AppColors.textLow)),
             )
           : Column(
               children: [
@@ -589,6 +631,7 @@ class _WorkoutRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final AppStrings s = context.s;
     final color = switch (w.workoutType) {
       WorkoutType.heavy => AppColors.accent,
       WorkoutType.volume => AppColors.success,
@@ -608,14 +651,16 @@ class _WorkoutRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                w.summary,
+                w.summary(s.unitKg),
                 style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: AppColors.textHi),
               ),
               Text(
-                '${DateFormat('MMM d, HH:mm').format(w.date)} · ${w.workoutType}',
+                // Month names follow the language too, hence the locale code.
+                '${DateFormat('MMM d, HH:mm', s.locale.code).format(w.date)} · '
+                '${s.workoutType(w.workoutType)}',
                 style: const TextStyle(fontSize: 11, color: AppColors.textLow),
               ),
             ],
@@ -630,7 +675,7 @@ class _WorkoutRow extends StatelessWidget {
           onPressed: onDelete,
           icon: const Icon(Icons.delete_outline, size: 18),
           color: AppColors.textLow,
-          tooltip: 'Delete',
+          tooltip: s.delete,
         ),
       ],
     );
@@ -656,7 +701,8 @@ class _ErrorState extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: AppColors.textMid)),
               const SizedBox(height: 16),
-              FilledButton(onPressed: onRetry, child: const Text('Retry')),
+              FilledButton(
+                  onPressed: onRetry, child: Text(context.s.retry)),
             ],
           ),
         ),

@@ -1,7 +1,14 @@
 import 'constants.dart';
 
+/// The rungs of the warm-up ramp.
+///
+/// The label and the purpose text live in the localization layer, keyed by this
+/// enum — the ramp is a rule of the program, not an English sentence, and this
+/// file stays free of both Flutter and copy.
+enum WarmupStage { bar, sixty, eighty, ninety }
+
 /// A single warm-up set in the ramp.
-typedef WarmupSet = ({String label, double weight, int reps, String purpose});
+typedef WarmupSet = ({WarmupStage stage, double weight, int reps});
 
 /// Pure functions implementing the program's progression rules.
 ///
@@ -28,29 +35,21 @@ abstract final class Progression {
   /// and the top set is a single. Every load is snapped to a real 2.5 kg
   /// increment and floored at the empty bar.
   static List<WarmupSet> warmup(double workingWeight) => [
+        (stage: WarmupStage.bar, weight: kBarbellKg, reps: 10),
         (
-          label: 'Empty Bar',
-          weight: kBarbellKg,
-          reps: 10,
-          purpose: 'Blood flow & joint lubrication',
-        ),
-        (
-          label: '60%',
+          stage: WarmupStage.sixty,
           weight: roundToPlate(workingWeight * 0.60),
           reps: 5,
-          purpose: 'Grooving the movement pattern',
         ),
         (
-          label: '80%',
+          stage: WarmupStage.eighty,
           weight: roundToPlate(workingWeight * 0.80),
           reps: 3,
-          purpose: 'CNS activation',
         ),
         (
-          label: '90%',
+          stage: WarmupStage.ninety,
           weight: roundToPlate(workingWeight * 0.90),
           reps: 1,
-          purpose: 'Heavy single - feel the load, no fatigue',
         ),
       ];
 

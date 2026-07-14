@@ -1,4 +1,4 @@
-# Bench Tracker
+# 1RM
 
 Cross-platform port of `bench_tracker.py`, with the local JSON file replaced by
 Supabase so training and nutrition sync across devices.
@@ -23,6 +23,18 @@ Supabase dashboard → **SQL Editor** → **New query**, paste each file in
   `height_cm` and `activity_level` to `profiles`. **Required even on an existing
   database** — the daily targets are now Mifflin-St Jeor BMR × activity, and the
   app writes those three columns on every profile save.
+- [`004_profile_language_bench_goal.sql`](supabase/migrations/004_profile_language_bench_goal.sql)
+  adds `bench_goal_kg` (the custom bench press target, default 95) and
+  `language` (`en` / `ru`) to `profiles`. **Required even on an existing
+  database** — the app writes both columns on every profile save, and they are
+  what makes the goal and the language follow you from Windows to Android
+  instead of being set twice.
+- [`005_profile_gender.sql`](supabase/migrations/005_profile_gender.sql) adds
+  `gender` (`Male` / `Female`, default `Male`) to `profiles`. **Required even on
+  an existing database** — the app writes it on every profile save, and it is an
+  input to the targets, not a label: Mifflin-St Jeor ends `+ 5` for men and
+  `- 161` for women, so without it a female lifter is over-fed by a few hundred
+  kcal a day.
 
 ## 2. Get your keys
 
@@ -179,6 +191,26 @@ server-side.
 it in the SQL Editor *after* signing up in the app once. It is idempotent — every
 insert is guarded, so running it twice cannot duplicate rows, and its profile
 upsert deliberately never overwrites `celebrated_milestones`.
+
+**Language and bench goal are profile columns, not local settings.** Both live on
+the `profiles` row, so setting either one on the desktop shows up on the phone.
+They are exposed through a single `ChangeNotifier` (`AppState`) published with an
+`InheritedNotifier` (`AppScope`) — no state-management package, so the build
+arguments and CI are unchanged. Changing either value rebuilds every listener in
+the same frame: the tabs, the app bar and the settings screen all read one
+`Profile` and none of them keeps a copy.
+
+**Translations are a typed interface, not a string map.** `AppStrings` declares
+every user-visible string; `EnStrings` and `RuStrings` implement it. A missing
+Russian translation is therefore a compile error rather than a blank label on a
+phone. The values persisted in Supabase — `workout_type`, `goal`,
+`activity_level` — stay English in the database and are translated only on the
+way to the screen, because SQL `CHECK` constraints are matching on those exact
+strings. Russian's three plural forms are handled in `RuStrings._plural`.
+
+**The bench goal is bounded (20–500 kg), client-side and in SQL.** The floor is
+the empty bar; the ceiling only ever catches a typo (950 for 95). `Profile`
+clamps on read and write, and the `CHECK` constraint is the backstop.
 
 `bench_tracker.py` and `workout_data.json` are otherwise untouched; the Python app
 still runs (it now reads `GEMINI_API_KEY` from the environment instead of a

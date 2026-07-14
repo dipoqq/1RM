@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/theme.dart';
 import '../../models/meal.dart';
+import '../../state/app_state.dart';
 
 /// Horizontally scrolling day strip.
 ///
@@ -149,7 +150,8 @@ class _DayCell extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              DateFormat('E').format(day).toUpperCase(),
+              // ПН / ВТ / СР in Russian, MON / TUE / WED in English.
+              DateFormat('E', context.s.locale.code).format(day).toUpperCase(),
               style: TextStyle(
                 fontSize: 10,
                 letterSpacing: 0.8,
