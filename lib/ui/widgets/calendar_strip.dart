@@ -126,7 +126,8 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final fg = selected ? AppColors.onAccent : AppColors.textHi;
+    final c = context.colors;
+    final fg = selected ? c.onAccent : c.textHi;
 
     return GestureDetector(
       onTap: onTap,
@@ -135,14 +136,14 @@ class _DayCell extends StatelessWidget {
         curve: Curves.easeOut,
         width: width,
         decoration: BoxDecoration(
-          color: selected ? AppColors.accent : AppColors.bgBase,
+          color: selected ? c.accent : c.bgBase,
           borderRadius: BorderRadius.circular(AppRadii.control),
           border: Border.all(
             color: selected
-                ? AppColors.accent
+                ? c.accent
                 : isToday
-                    ? AppColors.accent.withValues(alpha: 0.45)
-                    : AppColors.border,
+                    ? c.accent.withValues(alpha: 0.45)
+                    : c.border,
             width: isToday && !selected ? 1.6 : 1,
           ),
         ),
@@ -156,7 +157,7 @@ class _DayCell extends StatelessWidget {
                 fontSize: 10,
                 letterSpacing: 0.8,
                 fontWeight: FontWeight.w600,
-                color: selected ? AppColors.onAccent : AppColors.textLow,
+                color: selected ? c.onAccent : c.textLow,
               ),
             ),
             const SizedBox(height: 4),
@@ -176,7 +177,7 @@ class _DayCell extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: isToday
-                    ? (selected ? AppColors.onAccent : AppColors.accent)
+                    ? (selected ? c.onAccent : c.accent)
                     : Colors.transparent,
               ),
             ),

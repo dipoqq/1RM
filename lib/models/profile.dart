@@ -1,5 +1,6 @@
 import '../core/constants.dart';
 import '../core/l10n/app_locale.dart';
+import '../core/theme_mode.dart';
 
 /// Fitness goal → the daily calorie delta applied on top of TDEE.
 enum Goal {
@@ -144,7 +145,9 @@ class Profile {
     this.activity = ActivityLevel.moderatelyActive,
     this.benchGoalKg = kDefaultGoalKg,
     this.locale = AppLocale.en,
+    this.themeMode = AppThemeMode.dark,
     this.celebratedMilestones = const [],
+    this.onboardedAt,
   });
 
   final double weightKg;
@@ -166,10 +169,27 @@ class Profile {
   /// from the desktop app to the phone rather than being made twice.
   final AppLocale locale;
 
+  /// Dark or light. Persisted for the same reason the language is: it is a
+  /// preference, and a preference that has to be set once per device is a
+  /// preference the user resents.
+  final AppThemeMode themeMode;
+
   /// Milestone 1RMs whose confetti has already fired. The existing
   /// workout_data.json already contains [80.0] — the 80 kg celebration has
   /// been spent and must never re-fire.
   final List<double> celebratedMilestones;
+
+  /// When this lifter completed onboarding, or null if they never have.
+  ///
+  /// The one thing [needsOnboarding] is allowed to consult. It is NOT inferred
+  /// from the metrics: 180 cm / 94 kg / 30 y is both the column default and an
+  /// entirely ordinary body, so a lifter who really is those numbers would save
+  /// them at setup and then be bounced back into setup on every launch. Being
+  /// new is about never having been asked, not about what you weigh.
+  final DateTime? onboardedAt;
+
+  /// Whether the app must send this lifter through setup before the tabs open.
+  bool get needsOnboarding => onboardedAt == null;
 
   Targets get targets => targetsFor(
         weightKg: weightKg,
@@ -219,7 +239,9 @@ class Profile {
     ActivityLevel? activity,
     double? benchGoalKg,
     AppLocale? locale,
+    AppThemeMode? themeMode,
     List<double>? celebratedMilestones,
+    DateTime? onboardedAt,
   }) =>
       Profile(
         weightKg: weightKg ?? this.weightKg,
@@ -231,8 +253,13 @@ class Profile {
         benchGoalKg:
             benchGoalKg == null ? this.benchGoalKg : clampGoal(benchGoalKg),
         locale: locale ?? this.locale,
+        themeMode: themeMode ?? this.themeMode,
         celebratedMilestones:
             celebratedMilestones ?? this.celebratedMilestones,
+        // No way to clear it back to null, and that is intentional: onboarding
+        // is completed once and cannot be un-completed by a later copyWith
+        // (a language switch, a milestone claim) forgetting to carry it.
+        onboardedAt: onboardedAt ?? this.onboardedAt,
       );
 
   /// Every field falls back to the same default the SQL column does, so a row
@@ -247,9 +274,14 @@ class Profile {
         benchGoalKg: clampGoal(
             (json['bench_goal_kg'] as num?)?.toDouble() ?? kDefaultGoalKg),
         locale: AppLocale.fromCode(json['language'] as String?),
+        themeMode: AppThemeMode.fromCode(json['theme'] as String?),
         celebratedMilestones: ((json['celebrated_milestones'] as List?) ?? [])
             .map((e) => (e as num).toDouble())
             .toList(),
+        // Absent column (migration 006 not yet run) reads as null, i.e. "not
+        // onboarded" — the app then asks for the metrics rather than assuming
+        // the defaults are this lifter's body.
+        onboardedAt: DateTime.tryParse(json['onboarded_at'] as String? ?? ''),
       );
 
   Map<String, dynamic> toUpsert(String userId) => {
@@ -262,7 +294,9 @@ class Profile {
         'activity_level': activity.label,
         'bench_goal_kg': benchGoalKg,
         'language': locale.code,
+        'theme': themeMode.code,
         'celebrated_milestones': celebratedMilestones,
+        'onboarded_at': onboardedAt?.toUtc().toIso8601String(),
         'updated_at': DateTime.now().toUtc().toIso8601String(),
       };
 }

@@ -63,29 +63,38 @@ class _BenchAppState extends State<BenchApp> {
     if (state == null) {
       return _app(
         locale: AppLocale.fromSystem(),
+        // No profile to read a preference from on a failed boot, so the error
+        // screen opens in the app's own default look.
+        themeMode: AppThemeMode.dark,
         home: _BootErrorScreen(message: widget.bootError!),
       );
     }
 
-    // AppScope sits ABOVE MaterialApp, so a language switch rebuilds the app's
-    // own locale and delegates too — not just the screen that toggled it.
+    // AppScope sits ABOVE MaterialApp, so a language switch — or a theme
+    // switch — rebuilds the app's own theme, locale and delegates too, not just
+    // the screen that toggled it.
     return AppScope(
       state: state,
       child: AnimatedBuilder(
         animation: state,
         builder: (context, _) => _app(
           locale: state.locale,
+          themeMode: state.themeMode,
           home: AppScope(state: state, child: AuthGate(state: state)),
         ),
       ),
     );
   }
 
-  Widget _app({required AppLocale locale, required Widget home}) {
+  Widget _app({
+    required AppLocale locale,
+    required AppThemeMode themeMode,
+    required Widget home,
+  }) {
     return MaterialApp(
       title: AppStrings.of(locale).appTitle,
       debugShowCheckedModeBanner: false,
-      theme: buildTheme(),
+      theme: buildTheme(themeMode),
       locale: Locale(locale.code),
       supportedLocales: [for (final l in AppLocale.values) Locale(l.code)],
       // Flutter's own widget text (text-selection menus, tooltips, semantics)
@@ -110,6 +119,7 @@ class _BootErrorScreen extends StatelessWidget {
     // Deliberately not from context.s: this screen renders when there is no
     // AppState, and the message itself is a developer-facing build error.
     final s = AppStrings.of(AppLocale.fromSystem());
+    final c = context.colors;
 
     return Scaffold(
       body: Center(
@@ -118,31 +128,30 @@ class _BootErrorScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.settings_ethernet,
-                  size: 40, color: AppColors.textLow),
+              Icon(Icons.settings_ethernet, size: 40, color: c.textLow),
               const SizedBox(height: 16),
               Text(
                 s.configMissing,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textHi),
+                    color: c.textHi),
               ),
               const SizedBox(height: 10),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textMid, height: 1.5),
+                style: TextStyle(color: c.textMid, height: 1.5),
               ),
               const SizedBox(height: 20),
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.card,
+                  color: c.card,
                   borderRadius: BorderRadius.circular(AppRadii.control),
-                  border: Border.all(color: AppColors.border),
+                  border: Border.all(color: c.border),
                 ),
-                child: const SelectableText(
+                child: SelectableText(
                   'flutter run -d chrome \\\n'
                   '  --dart-define=SUPABASE_URL=https://xxx.supabase.co \\\n'
                   '  --dart-define=SUPABASE_ANON_KEY=eyJ... \\\n'
@@ -150,7 +159,7 @@ class _BootErrorScreen extends StatelessWidget {
                   style: TextStyle(
                       fontFamily: 'Consolas',
                       fontSize: 12,
-                      color: AppColors.textMid),
+                      color: c.textMid),
                 ),
               ),
             ],

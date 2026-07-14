@@ -1,4 +1,5 @@
 import 'package:bench_app/core/l10n/app_locale.dart';
+import 'package:bench_app/core/theme_mode.dart';
 import 'package:bench_app/models/profile.dart';
 import 'package:bench_app/state/app_state.dart';
 import 'package:flutter/material.dart';
@@ -202,6 +203,88 @@ void main() {
       // The sign-in screen's toggle: there is no row to write to yet.
       expect(state.locale, AppLocale.ru);
       expect(backend.saves, isEmpty);
+    });
+  });
+
+  group('onboarding', () {
+    test('a fresh profile needs onboarding; a stamped one does not', () {
+      build(profile: const Profile());
+      expect(state.needsOnboarding, isTrue);
+
+      build(profile: Profile(onboardedAt: DateTime.utc(2026, 1, 1)));
+      expect(state.needsOnboarding, isFalse);
+    });
+
+    test('completing it writes the metrics AND stamps onboardedAt', () async {
+      build(profile: const Profile());
+
+      await state.completeOnboarding(
+        gender: Gender.female,
+        heightCm: 165,
+        weightKg: 61,
+        age: 27,
+        benchGoalKg: 60,
+      );
+
+      expect(state.needsOnboarding, isFalse);
+      final saved = backend.saves.single;
+      expect(saved.gender, Gender.female);
+      expect(saved.heightCm, 165);
+      expect(saved.weightKg, 61);
+      expect(saved.age, 27);
+      expect(saved.benchGoalKg, 60);
+      expect(saved.onboardedAt, isNotNull);
+      // The row the phone reads back carries the stamp too.
+      expect(saved.toUpsert('u')['onboarded_at'], isNotNull);
+    });
+
+    test('a failed save leaves the gate shut, not falsely open', () async {
+      build(profile: const Profile());
+      backend.failNextSave = Exception('network down');
+
+      await expectLater(
+        state.completeOnboarding(
+          gender: Gender.male,
+          heightCm: 180,
+          weightKg: 80,
+          age: 30,
+          benchGoalKg: 100,
+        ),
+        throwsA(isA<Exception>()),
+      );
+
+      // Nothing was flipped locally: the user is still held at onboarding and
+      // can try again, rather than being dropped onto the tabs with a profile
+      // that only exists on their screen.
+      expect(state.needsOnboarding, isTrue);
+      expect(backend.saves, isEmpty);
+    });
+
+    test('the loaded flag gates the flash of onboarding at launch', () async {
+      build(profile: Profile(onboardedAt: DateTime.utc(2026, 1, 1)));
+      // Before load(), nothing may be concluded.
+      expect(state.loaded, isFalse);
+
+      await state.load();
+      expect(state.loaded, isTrue);
+      expect(state.needsOnboarding, isFalse);
+    });
+  });
+
+  group('theme', () {
+    test('a theme switch is written to the profile row', () async {
+      build(profile: const Profile(themeMode: AppThemeMode.dark));
+
+      await state.update(themeMode: AppThemeMode.light);
+
+      expect(state.themeMode, AppThemeMode.light);
+      expect(backend.saves.single.toUpsert('u')['theme'], 'light');
+    });
+
+    test('signing out keeps the theme the user was looking at', () {
+      build(profile: const Profile(themeMode: AppThemeMode.light));
+      state.clear();
+      expect(state.themeMode, AppThemeMode.light);
     });
   });
 

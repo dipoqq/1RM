@@ -10,6 +10,17 @@ const double kDefaultGoalKg = 95.0; // 1RM goal a fresh profile starts on
 const double kMinGoalKg = 20.0;
 const double kMaxGoalKg = 500.0;
 
+/// Bounds on the body metrics collected at onboarding. Wide enough that no real
+/// lifter is locked out, tight enough to catch the slip that would otherwise
+/// feed Mifflin-St Jeor a nonsense BMR — 18 kg for 180, or a height typed into
+/// the weight field.
+const double kMinHeightCm = 100.0;
+const double kMaxHeightCm = 250.0;
+const double kMinWeightKg = 30.0;
+const double kMaxWeightKg = 300.0;
+const int kMinAge = 13;
+const int kMaxAge = 100;
+
 const double kBarbellKg = 20.0; // standard Olympic bar
 const double kPlateStepKg = 2.5; // smallest practical jump (2 x 1.25 kg)
 const int kPlateauThreshold = 3; // consecutive failed heavy days = plateau
@@ -41,6 +52,11 @@ List<Milestone> milestonesFor(double goalKg) => [
       (kg: goalKg, isFinal: true),
     ];
 
-/// The lifter, as Gemini should understand him.
-const kLifterProfile =
-    'an 18-year-old, 197 cm tall, 94 kg lifter';
+/// What the AI is told when a body metric is missing or nonsense.
+///
+/// This used to be a hardcoded description of one specific lifter, which every
+/// user's prompt was built from — so the AI sized a stranger's meals against
+/// that lifter's body. The metrics now come from the live [Profile]; when one
+/// of them is unusable the prompt says so rather than substituting a number,
+/// because inventing a plausible body is the bug, not the fix.
+const kUnknownMetric = 'unknown';

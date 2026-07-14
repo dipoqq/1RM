@@ -2,6 +2,7 @@ import 'package:bench_app/core/constants.dart';
 import 'package:bench_app/core/l10n/app_locale.dart';
 import 'package:bench_app/core/l10n/app_strings.dart';
 import 'package:bench_app/core/progression.dart';
+import 'package:bench_app/core/theme_mode.dart';
 import 'package:bench_app/models/profile.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -33,6 +34,16 @@ void main() {
             'benchGoalSection': s.benchGoalSection,
             'benchGoalLabel': s.benchGoalLabel,
             'benchGoalHint': s.benchGoalHint,
+            'onboardingTitle': s.onboardingTitle,
+            'onboardingSubtitle': s.onboardingSubtitle,
+            'onboardingIntro': s.onboardingIntro,
+            'onboardingBodySection': s.onboardingBodySection,
+            'onboardingGoalSection': s.onboardingGoalSection,
+            'onboardingGoalHint': s.onboardingGoalHint,
+            'onboardingFinish': s.onboardingFinish,
+            'loadingProfile': s.loadingProfile,
+            'theme': s.theme,
+            'themeHint': s.themeHint,
             'estimated1rm': s.estimated1rm,
             'logSession': s.logSession,
             'warmupRamp': s.warmupRamp,
@@ -76,6 +87,21 @@ void main() {
           }
         });
 
+        test('names both themes', () {
+          for (final mode in AppThemeMode.values) {
+            expect(s.themeLabel(mode).trim(), isNotEmpty);
+          }
+        });
+
+        test('interpolates the metric range errors', () {
+          expect(s.heightOutOfRange(100, 250),
+              allOf(contains('100'), contains('250')));
+          expect(s.weightOutOfRange(30, 300),
+              allOf(contains('30'), contains('300')));
+          expect(s.ageOutOfRange(13, 100),
+              allOf(contains('13'), contains('100')));
+        });
+
         test('interpolates its arguments rather than dropping them', () {
           expect(s.remainingToGoal('12.5', '95'), allOf(contains('12.5'), contains('95')));
           expect(s.percentOfGoal(87), contains('87'));
@@ -114,6 +140,14 @@ void main() {
       expect(row['goal'], 'Cut');
       expect(row['activity_level'], 'Moderately Active');
       expect(row['language'], 'ru');
+    });
+
+    test('the theme is stored as its code, matching the SQL CHECK', () {
+      expect(AppThemeMode.dark.code, 'dark');
+      expect(AppThemeMode.light.code, 'light');
+      final row = const Profile(themeMode: AppThemeMode.light).toUpsert('u1');
+      expect(row['theme'], 'light');
+      expect(AppThemeMode.fromCode('nonsense'), AppThemeMode.dark);
     });
   });
 

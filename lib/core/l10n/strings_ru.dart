@@ -1,5 +1,6 @@
 import '../../models/profile.dart';
 import '../progression.dart';
+import '../theme_mode.dart';
 import 'app_locale.dart';
 import 'app_strings.dart';
 
@@ -67,6 +68,38 @@ class RuStrings implements AppStrings {
   @override
   String get haveAccount => 'У меня уже есть аккаунт';
 
+  // -- onboarding ------------------------------------------------------------
+
+  @override
+  String get onboardingTitle => 'Добро пожаловать в 1RM.';
+  @override
+  String get onboardingSubtitle => 'Давайте настроим ваш профиль.';
+  @override
+  String get onboardingIntro =>
+      'По этим данным рассчитываются дневные нормы калорий и макронутриентов, '
+      'а также цель в жиме лёжа, с которой сравнивается каждая тренировка. '
+      'Всё это можно изменить позже в настройках.';
+  @override
+  String get onboardingBodySection => 'О себе';
+  @override
+  String get onboardingGoalSection => 'Ваша цель в жиме лёжа';
+  @override
+  String get onboardingGoalHint =>
+      'Вес, к которому вы идёте. Когда возьмёте его — полетит конфетти.';
+  @override
+  String get onboardingFinish => 'Начать тренировки';
+  @override
+  String get loadingProfile => 'Загружаем ваш профиль…';
+  @override
+  String heightOutOfRange(double min, double max) =>
+      'Введите рост от ${min.round()} до ${max.round()} см.';
+  @override
+  String weightOutOfRange(double min, double max) =>
+      'Введите вес от ${min.round()} до ${max.round()} кг.';
+  @override
+  String ageOutOfRange(int min, int max) =>
+      'Введите возраст от $min до $max ${_plural(max, 'года', 'лет', 'лет')}.';
+
   // -- settings --------------------------------------------------------------
 
   @override
@@ -74,6 +107,16 @@ class RuStrings implements AppStrings {
   @override
   String get languageHint =>
       'Применяется сразу и синхронизируется с другими устройствами.';
+  @override
+  String get theme => 'Оформление';
+  @override
+  String get themeHint =>
+      'Применяется сразу и синхронизируется с другими устройствами.';
+  @override
+  String themeLabel(AppThemeMode mode) => switch (mode) {
+        AppThemeMode.dark => 'Тёмное',
+        AppThemeMode.light => 'Светлое',
+      };
   @override
   String get benchGoalSection => 'Цель в жиме лёжа';
   @override

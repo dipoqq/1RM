@@ -34,6 +34,7 @@ class _HomeShellState extends State<HomeShell> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return Scaffold(
@@ -71,20 +72,20 @@ class _HomeShellState extends State<HomeShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
-        backgroundColor: AppColors.bgBase,
-        indicatorColor: AppColors.accentTint,
+        backgroundColor: c.bgBase,
+        indicatorColor: c.accentTint,
         surfaceTintColor: Colors.transparent,
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.fitness_center_outlined),
             selectedIcon:
-                const Icon(Icons.fitness_center, color: AppColors.accentDim),
+                Icon(Icons.fitness_center, color: c.accentDim),
             label: s.tabTraining,
           ),
           NavigationDestination(
             icon: const Icon(Icons.restaurant_outlined),
             selectedIcon:
-                const Icon(Icons.restaurant, color: AppColors.accentDim),
+                Icon(Icons.restaurant, color: c.accentDim),
             label: s.tabNutrition,
           ),
         ],

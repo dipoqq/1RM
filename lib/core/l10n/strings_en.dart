@@ -1,5 +1,6 @@
 import '../../models/profile.dart';
 import '../progression.dart';
+import '../theme_mode.dart';
 import 'app_locale.dart';
 import 'app_strings.dart';
 
@@ -53,6 +54,38 @@ class EnStrings implements AppStrings {
   @override
   String get haveAccount => 'I already have an account';
 
+  // -- onboarding ------------------------------------------------------------
+
+  @override
+  String get onboardingTitle => 'Welcome to 1RM.';
+  @override
+  String get onboardingSubtitle => "Let's set up your profile.";
+  @override
+  String get onboardingIntro =>
+      'These numbers drive your daily calorie and macro targets, and the bench '
+      'press goal every session is measured against. You can change any of '
+      'them later in Settings.';
+  @override
+  String get onboardingBodySection => 'About you';
+  @override
+  String get onboardingGoalSection => 'Your bench press goal';
+  @override
+  String get onboardingGoalHint =>
+      'The 1RM you are training toward. Clearing it fires the confetti.';
+  @override
+  String get onboardingFinish => 'Start training';
+  @override
+  String get loadingProfile => 'Loading your profile…';
+  @override
+  String heightOutOfRange(double min, double max) =>
+      'Enter a height between ${min.round()} and ${max.round()} cm.';
+  @override
+  String weightOutOfRange(double min, double max) =>
+      'Enter a weight between ${min.round()} and ${max.round()} kg.';
+  @override
+  String ageOutOfRange(int min, int max) =>
+      'Enter an age between $min and $max.';
+
   // -- settings --------------------------------------------------------------
 
   @override
@@ -60,6 +93,16 @@ class EnStrings implements AppStrings {
   @override
   String get languageHint =>
       'Applies immediately and syncs to your other devices.';
+  @override
+  String get theme => 'Appearance';
+  @override
+  String get themeHint =>
+      'Applies immediately and syncs to your other devices.';
+  @override
+  String themeLabel(AppThemeMode mode) => switch (mode) {
+        AppThemeMode.dark => 'Dark',
+        AppThemeMode.light => 'Light',
+      };
   @override
   String get benchGoalSection => 'Bench press goal';
   @override

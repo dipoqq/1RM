@@ -27,7 +27,8 @@ void main() {
   }
 
   /// Save sits below the fold on the 800×600 test surface now that the screen
-  /// carries a gender card too — scroll to it the way a thumb would.
+  /// carries language, theme and gender cards above the bench goal — scroll to
+  /// it the way a thumb would.
   Future<void> tapSave(WidgetTester tester, {String label = 'Save'}) async {
     final save = find.widgetWithText(FilledButton, label);
     await tester.ensureVisible(save);
@@ -35,14 +36,28 @@ void main() {
     await tester.tap(save);
   }
 
+  /// The bench goal field is below the fold for the same reason. A lazy
+  /// ListView does not even build off-screen children, so scroll it into
+  /// existence before typing — otherwise its editable state does not exist yet.
+  Future<Finder> revealGoalField(WidgetTester tester) async {
+    final field = find.byType(TextField);
+    // The screen's own ListView is the outermost Scrollable; the SegmentedButtons
+    // above bring their own, so pin the scroll to the first one.
+    await tester.scrollUntilVisible(field, 120,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pump();
+    return field;
+  }
+
   testWidgets('typing a custom bench goal saves it and updates the app',
       (tester) async {
     await open(tester, profile: const Profile(benchGoalKg: 95));
 
+    final field = await revealGoalField(tester);
     // The field opens on the goal in force.
     expect(find.widgetWithText(TextField, '95'), findsOneWidget);
 
-    await tester.enterText(find.byType(TextField), '90');
+    await tester.enterText(field, '90');
     await tapSave(tester);
     await tester.pumpAndSettle();
 
@@ -55,7 +70,7 @@ void main() {
   testWidgets('a successful save is confirmed to the user', (tester) async {
     await open(tester, profile: const Profile(benchGoalKg: 95));
 
-    await tester.enterText(find.byType(TextField), '100');
+    await tester.enterText(await revealGoalField(tester), '100');
     await tapSave(tester);
     await tester.pump(); // let the SnackBar in
 
@@ -65,7 +80,7 @@ void main() {
   testWidgets('the success message is localized', (tester) async {
     await open(tester, profile: const Profile(locale: AppLocale.ru));
 
-    await tester.enterText(find.byType(TextField), '100');
+    await tester.enterText(await revealGoalField(tester), '100');
     await tapSave(tester, label: 'Сохранить');
     await tester.pump();
 
@@ -75,7 +90,7 @@ void main() {
   testWidgets('a typo is rejected instead of being persisted', (tester) async {
     await open(tester, profile: const Profile(benchGoalKg: 95));
 
-    await tester.enterText(find.byType(TextField), '950'); // meant 95
+    await tester.enterText(await revealGoalField(tester), '950'); // meant 95
     await tapSave(tester);
     await tester.pump();
 
@@ -105,13 +120,19 @@ void main() {
     await open(tester, profile: const Profile(locale: AppLocale.en));
 
     expect(find.text('Settings'), findsOneWidget); // the AppBar
-    // SectionCard upper-cases its title, so this is the card heading.
+    // SectionCard upper-cases its title, so this is the card heading. Scroll it
+    // into view first: with language, theme and gender cards above it, the
+    // bench card sits below the fold of the test surface.
+    await tester.scrollUntilVisible(find.text('BENCH PRESS GOAL'), 120,
+        scrollable: find.byType(Scrollable).first);
     expect(find.text('BENCH PRESS GOAL'), findsOneWidget);
 
     await tester.tap(find.text('Русский'));
     await tester.pumpAndSettle();
 
     expect(find.text('Настройки'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('ЦЕЛЬ В ЖИМЕ ЛЁЖА'), 120,
+        scrollable: find.byType(Scrollable).first);
     expect(find.text('ЦЕЛЬ В ЖИМЕ ЛЁЖА'), findsOneWidget);
     expect(state.profile.locale, AppLocale.ru);
     expect(backend.saves.single.locale, AppLocale.ru);

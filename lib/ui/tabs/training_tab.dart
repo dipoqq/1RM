@@ -160,22 +160,23 @@ class _TrainingTabState extends State<TrainingTab> {
 
   void _showMilestoneDialog(Milestone milestone, double best) {
     final s = context.s;
+    final c = context.colors;
     showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.bgBase,
+        backgroundColor: c.bgBase,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.card),
         ),
         title: Text(
           s.milestoneTitle(ui.fmtKg(milestone.kg)),
-          style: const TextStyle(
-              fontWeight: FontWeight.w800, color: AppColors.accent),
+          style: TextStyle(
+              fontWeight: FontWeight.w800, color: c.accent),
         ),
         content: Text(
           '${s.milestoneSubtitle(milestone.isFinal)}\n\n'
           '${s.milestoneBody(best.toStringAsFixed(1))}',
-          style: const TextStyle(color: AppColors.textMid, height: 1.5),
+          style: TextStyle(color: c.textMid, height: 1.5),
         ),
         actions: [
           FilledButton(
@@ -266,19 +267,20 @@ class _PlateauBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return ui.Banner(
       icon: Icons.warning_amber_rounded,
       title: s.plateauTitle,
       message: s.plateauMessage(streak, ui.fmtKg(from), ui.fmtKg(to)),
-      color: AppColors.warning,
-      tint: AppColors.warningTint,
+      color: c.warning,
+      tint: c.warningTint,
       action: FilledButton.tonal(
         onPressed: onApply,
         style: FilledButton.styleFrom(
-          backgroundColor: AppColors.warning,
-          foregroundColor: AppColors.onAccent,
+          backgroundColor: c.warning,
+          foregroundColor: c.onAccent,
           minimumSize: const Size(0, 40),
         ),
         child: Text(s.loadWeight(ui.fmtKg(to))),
@@ -299,6 +301,7 @@ class _StatsRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
     final goalKg = ui.fmtKg(progress.goalKg);
 
@@ -306,7 +309,7 @@ class _StatsRow extends StatelessWidget {
       title: s.estimated1rm,
       trailing: _Chip(
         label: s.percentOfGoal(progress.percent),
-        color: progress.cleared ? AppColors.success : AppColors.accentDim,
+        color: progress.cleared ? c.success : c.accentDim,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,21 +322,21 @@ class _StatsRow extends StatelessWidget {
                 progress.best == null
                     ? '—'
                     : progress.best!.toStringAsFixed(1),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 40,
                   fontWeight: FontWeight.w800,
-                  color: AppColors.textHi,
+                  color: c.textHi,
                   height: 1,
                 ),
               ),
               const SizedBox(width: 6),
               Text('/ $goalKg ${s.unitKg}',
                   style:
-                      const TextStyle(fontSize: 16, color: AppColors.textLow)),
+                      TextStyle(fontSize: 16, color: c.textLow)),
               const Spacer(),
               _Chip(
                 label: s.weeksCompleted(history.weeksCompleted),
-                color: AppColors.textMid,
+                color: c.textMid,
               ),
             ],
           ),
@@ -349,15 +352,15 @@ class _StatsRow extends StatelessWidget {
               builder: (context, value, _) => LinearProgressIndicator(
                 value: value,
                 minHeight: 8,
-                backgroundColor: AppColors.border,
+                backgroundColor: c.border,
                 valueColor: AlwaysStoppedAnimation(
                   progress.cleared
-                      ? AppColors.success
+                      ? c.success
                       // Thresholds are fractions of the lifter's own goal, not
                       // a hardcoded 80 kg: a 75 kg goal has no "80 kg" stage.
                       : progress.ratio >= 0.85
-                          ? AppColors.accent
-                          : AppColors.accentDim,
+                          ? c.accent
+                          : c.accentDim,
                 ),
               ),
             ),
@@ -367,7 +370,7 @@ class _StatsRow extends StatelessWidget {
             progress.cleared
                 ? s.goalCleared(goalKg)
                 : s.remainingToGoal(ui.fmtKg(progress.remainingKg), goalKg),
-            style: const TextStyle(fontSize: 12, color: AppColors.textLow),
+            style: TextStyle(fontSize: 12, color: c.textLow),
           ),
         ],
       ),
@@ -382,17 +385,20 @@ class _Chip extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          color: AppColors.bgBase,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Text(label,
-            style: TextStyle(
-                fontSize: 11, fontWeight: FontWeight.w600, color: color)),
-      );
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: c.bgBase,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.border),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w600, color: color)),
+    );
+  }
 }
 
 class _LogCard extends StatelessWidget {
@@ -420,6 +426,7 @@ class _LogCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return ui.SectionCard(
@@ -479,19 +486,19 @@ class _LogCard extends StatelessWidget {
             value: completed,
             onChanged: onCompleted,
             contentPadding: EdgeInsets.zero,
-            activeThumbColor: AppColors.success,
+            activeThumbColor: c.success,
             title: Text(
               completed ? s.allSetsCompleted : s.failedReps,
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: completed ? AppColors.success : AppColors.danger,
+                color: completed ? c.success : c.danger,
               ),
             ),
             subtitle: Text(
               s.failedDrivePlateau,
               style:
-                  const TextStyle(fontSize: 12, color: AppColors.textLow),
+                  TextStyle(fontSize: 12, color: c.textLow),
             ),
           ),
           const SizedBox(height: 6),
@@ -500,11 +507,11 @@ class _LogCard extends StatelessWidget {
             child: FilledButton(
               onPressed: onSubmit,
               child: saving
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 18,
                       height: 18,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.onAccent),
+                          strokeWidth: 2, color: c.onAccent),
                     )
                   : Text(s.logSessionButton),
             ),
@@ -522,21 +529,22 @@ class _WarmupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
     final sets = Progression.warmup(working);
-    const accents = [
-      AppColors.textMid,
-      AppColors.success,
-      AppColors.accent,
-      AppColors.warning,
+    final accents = [
+      c.textMid,
+      c.success,
+      c.accent,
+      c.warning,
     ];
 
     return ui.SectionCard(
       title: s.warmupRamp,
       trailing: Text(
         s.warmupTo(ui.fmtKg(working)),
-        style: const TextStyle(
-            fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.textMid),
+        style: TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w600, color: c.textMid),
       ),
       child: Column(
         children: [
@@ -557,26 +565,26 @@ class _WarmupCard extends StatelessWidget {
                   width: 92,
                   child: Text(
                     s.warmupLabel(sets[i].stage),
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textHi),
+                        color: c.textHi),
                   ),
                 ),
                 Expanded(
                   child: Text(
                     s.warmupPurpose(sets[i].stage),
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.textLow),
+                    style: TextStyle(
+                        fontSize: 12, color: c.textLow),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   '${ui.fmtKg(sets[i].weight)} ${s.unitKg} × ${sets[i].reps}',
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.textHi),
+                      color: c.textHi),
                 ),
               ],
             ),
@@ -584,7 +592,7 @@ class _WarmupCard extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             s.warmupFootnote,
-            style: const TextStyle(fontSize: 11, color: AppColors.textLow),
+            style: TextStyle(fontSize: 11, color: c.textLow),
           ),
         ],
       ),
@@ -600,6 +608,7 @@ class _HistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
     final recent = history.all.take(8).toList();
 
@@ -609,7 +618,7 @@ class _HistoryCard extends StatelessWidget {
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: Text(s.noSessions,
-                  style: const TextStyle(color: AppColors.textLow)),
+                  style: TextStyle(color: c.textLow)),
             )
           : Column(
               children: [
@@ -631,11 +640,12 @@ class _WorkoutRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final AppStrings s = context.s;
     final color = switch (w.workoutType) {
-      WorkoutType.heavy => AppColors.accent,
-      WorkoutType.volume => AppColors.success,
-      _ => AppColors.warning,
+      WorkoutType.heavy => c.accent,
+      WorkoutType.volume => c.success,
+      _ => c.warning,
     };
 
     return Row(
@@ -652,16 +662,16 @@ class _WorkoutRow extends StatelessWidget {
             children: [
               Text(
                 w.summary(s.unitKg),
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppColors.textHi),
+                    color: c.textHi),
               ),
               Text(
                 // Month names follow the language too, hence the locale code.
                 '${DateFormat('MMM d, HH:mm', s.locale.code).format(w.date)} · '
                 '${s.workoutType(w.workoutType)}',
-                style: const TextStyle(fontSize: 11, color: AppColors.textLow),
+                style: TextStyle(fontSize: 11, color: c.textLow),
               ),
             ],
           ),
@@ -669,12 +679,12 @@ class _WorkoutRow extends StatelessWidget {
         Icon(
           w.completed ? Icons.check_circle : Icons.cancel,
           size: 18,
-          color: w.completed ? AppColors.success : AppColors.danger,
+          color: w.completed ? c.success : c.danger,
         ),
         IconButton(
           onPressed: onDelete,
           icon: const Icon(Icons.delete_outline, size: 18),
-          color: AppColors.textLow,
+          color: c.textLow,
           tooltip: s.delete,
         ),
       ],
@@ -689,22 +699,24 @@ class _ErrorState extends StatelessWidget {
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off, color: AppColors.textLow, size: 36),
-              const SizedBox(height: 12),
-              Text(message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: AppColors.textMid)),
-              const SizedBox(height: 16),
-              FilledButton(
-                  onPressed: onRetry, child: Text(context.s.retry)),
-            ],
-          ),
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off, color: c.textLow, size: 36),
+            const SizedBox(height: 12),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: c.textMid)),
+            const SizedBox(height: 16),
+            FilledButton(onPressed: onRetry, child: Text(context.s.retry)),
+          ],
         ),
-      );
+      ),
+    );
+  }
 }

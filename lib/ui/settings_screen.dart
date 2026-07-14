@@ -100,6 +100,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _setTheme(AppThemeMode mode) async {
+    final state = context.app;
+    try {
+      // Optimistic, like the language: the repaint lands on this frame and the
+      // write follows. A theme switch that waited for Supabase would feel like
+      // a bug in the switch.
+      await state.update(themeMode: mode);
+    } catch (e) {
+      if (!mounted) return;
+      _snack(state.s.couldNotSaveSettings('$e'));
+    }
+  }
+
   Future<void> _setGender(Gender gender) async {
     final state = context.app;
     try {
@@ -120,6 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
     final state = context.app;
 
@@ -143,7 +157,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 10),
                 Text(
                   s.languageHint,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textLow),
+                  style: TextStyle(fontSize: 12, color: c.textLow),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          ui.SectionCard(
+            title: s.theme,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ui.ThemeToggle(
+                  mode: state.themeMode,
+                  onChanged: _setTheme,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  s.themeHint,
+                  style: TextStyle(fontSize: 12, color: c.textLow),
                 ),
               ],
             ),
@@ -161,7 +193,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 10),
                 Text(
                   s.genderHint,
-                  style: const TextStyle(fontSize: 12, color: AppColors.textLow),
+                  style: TextStyle(fontSize: 12, color: c.textLow),
                 ),
               ],
             ),
@@ -196,8 +228,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 10),
                 Text(
                   s.benchGoalHint,
-                  style: const TextStyle(
-                      fontSize: 12, height: 1.4, color: AppColors.textLow),
+                  style: TextStyle(
+                      fontSize: 12, height: 1.4, color: c.textLow),
                 ),
                 const SizedBox(height: 14),
                 SizedBox(

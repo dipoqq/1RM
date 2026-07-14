@@ -48,7 +48,7 @@ class GeminiService {
 
   GenerativeModel _model(
     String name,
-    Targets targets,
+    Profile profile,
     MacroTotals eaten,
     AppStrings strings,
   ) =>
@@ -56,7 +56,7 @@ class GeminiService {
         model: name,
         apiKey: _apiKey,
         systemInstruction:
-            Content.system(_systemPrompt(targets, eaten, strings)),
+            Content.system(systemPrompt(profile, eaten, strings)),
       );
 
   static bool _retryable(Object e) {
@@ -69,28 +69,61 @@ class GeminiService {
         s.contains('overloaded');
   }
 
-  static String _systemPrompt(
-    Targets targets,
+  /// One body metric, rendered for the prompt.
+  ///
+  /// Returns [kUnknownMetric] rather than a number when the profile has not
+  /// loaded yet or holds a value no body has (zero height, a negative age, a
+  /// NaN out of a bad row). The AI is told below to treat that as unknown and
+  /// ask, because substituting a stand-in body is precisely the bug this
+  /// method exists to prevent.
+  static String _metric(num value, String unit) =>
+      value.isFinite && value > 0 ? '${value.round()} $unit' : kUnknownMetric;
+
+  /// The system prompt for [profile] — the *active* user, whoever that is.
+  ///
+  /// Every body metric here is read from the live profile. Nothing about the
+  /// user's body may be hardcoded in this file: a constant here is a constant
+  /// for every user of the app, which is how a single developer's height and
+  /// weight ended up sizing other people's meals.
+  ///
+  /// Exposed (and not private) so the metrics it injects can be unit-tested
+  /// without a network call, exactly as [parseReply] is.
+  static String systemPrompt(
+    Profile profile,
     MacroTotals eaten,
     AppStrings strings,
   ) {
+    final targets = profile.targets;
     final kcalLeft = (targets.kcal - eaten.calories).round();
     final proteinLeft = (targets.protein - eaten.protein).round();
     final carbsLeft = (targets.carbs - eaten.carbs).round();
     final fatsLeft = (targets.fats - eaten.fats).round();
-    return '''
-You are an expert sports nutritionist advising $kLifterProfile.
 
-His targets today are ${targets.kcal} kcal, ${targets.protein} g protein,
+    final gender = profile.gender.label;
+    final height = _metric(profile.heightCm, 'cm');
+    final weight = _metric(profile.weightKg, 'kg');
+    final age = _metric(profile.age, 'years');
+
+    return '''
+You are an expert sports nutritionist.
+
+Analyze the nutrition for a user with the following metrics: Gender: $gender,
+Height: $height, Weight: $weight, Age: $age.
+
+Any metric given as "$kUnknownMetric" is genuinely unknown. Do not guess a value
+for it, do not assume a typical one, and do not give advice that depends on it —
+say what you would need to know instead.
+
+Their targets today are ${targets.kcal} kcal, ${targets.protein} g protein,
 ${targets.carbs} g carbs and ${targets.fats} g fats.
 
-So far he has eaten ${eaten.calories.round()} kcal, ${eaten.protein.round()} g
+So far they have eaten ${eaten.calories.round()} kcal, ${eaten.protein.round()} g
 protein, ${eaten.carbs.round()} g carbs and ${eaten.fats.round()} g fats —
 leaving $kcalLeft kcal, $proteinLeft g protein, $carbsLeft g carbs and
 $fatsLeft g fats.
 
-Assess the meal he describes or photographs. Be concise and practical: estimate
-all four macros, say how the meal fits what he has left today, and give one
+Assess the meal they describe or photograph. Be concise and practical: estimate
+all four macros, say how the meal fits what they have left today, and give one
 specific adjustment if it does not fit.
 
 ${strings.geminiReplyLanguage}
@@ -103,11 +136,16 @@ $_dataOpen Name: Meal Name | Calories: X | Protein: Y | Carbs: Z | Fats: W $_dat
 Use plain integers with no units inside the block. The block itself — the
 $_dataOpen and $_dataClose markers and the field names Name, Calories, Protein,
 Carbs and Fats — stays in English exactly as written above, whatever language
-the prose is in; it is parsed by the app, not read by the lifter. Only the meal
-name inside it is written in his language.''';
+the prose is in; it is parsed by the app, not read by the user. Only the meal
+name inside it is written in their language.''';
   }
 
   /// Analyse a meal from text and/or a photo.
+  ///
+  /// [profile] is the *active* user's profile — the body the advice is sized
+  /// against, and the source of the daily targets. It is passed whole rather
+  /// than pre-reduced to [Targets] so the metrics in the prompt and the targets
+  /// in the prompt cannot describe two different people.
   ///
   /// [day] is the calendar date the resulting meal is logged against — the date
   /// currently selected on the calendar strip, NOT necessarily today.
@@ -115,7 +153,7 @@ name inside it is written in his language.''';
     String text = '',
     Uint8List? image,
     String imageMime = 'image/jpeg',
-    required Targets targets,
+    required Profile profile,
     required MacroTotals eaten,
     required DateTime day,
     required AppStrings strings,
@@ -136,7 +174,7 @@ name inside it is written in his language.''';
     for (final name in _models) {
       final GenerateContentResponse response;
       try {
-        response = await _model(name, targets, eaten, strings)
+        response = await _model(name, profile, eaten, strings)
             .generateContent(content);
       } catch (e) {
         if (!_retryable(e)) rethrow;

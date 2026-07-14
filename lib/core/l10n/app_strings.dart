@@ -1,5 +1,6 @@
 import '../../models/profile.dart';
 import '../progression.dart';
+import '../theme_mode.dart';
 import 'app_locale.dart';
 import 'strings_en.dart';
 import 'strings_ru.dart';
@@ -49,10 +50,33 @@ abstract interface class AppStrings {
   String get createAccount;
   String get haveAccount;
 
+  // -- onboarding ------------------------------------------------------------
+
+  /// "Welcome to 1RM." — the header on first run.
+  String get onboardingTitle;
+
+  /// "Let's set up your profile."
+  String get onboardingSubtitle;
+  String get onboardingIntro;
+  String get onboardingBodySection;
+  String get onboardingGoalSection;
+  String get onboardingGoalHint;
+  String get onboardingFinish;
+
+  /// The gate's spinner, while the profile is being pulled.
+  String get loadingProfile;
+
+  String heightOutOfRange(double min, double max);
+  String weightOutOfRange(double min, double max);
+  String ageOutOfRange(int min, int max);
+
   // -- settings --------------------------------------------------------------
 
   String get language;
   String get languageHint;
+  String get theme;
+  String get themeHint;
+  String themeLabel(AppThemeMode mode);
   String get benchGoalSection;
   String get benchGoalLabel;
   String get benchGoalHint;

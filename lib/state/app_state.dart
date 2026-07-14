@@ -3,6 +3,7 @@ import 'package:flutter/widgets.dart';
 
 import '../core/l10n/app_locale.dart';
 import '../core/l10n/app_strings.dart';
+import '../core/theme_mode.dart';
 import '../models/profile.dart';
 import '../services/backend.dart';
 
@@ -31,7 +32,26 @@ class AppState extends ChangeNotifier {
   bool _loading = false;
   bool get loading => _loading;
 
+  /// Whether [load] has finished at least once for the current session.
+  ///
+  /// Until it has, [profile] is a placeholder built from defaults — and a
+  /// default profile has a null `onboardedAt`, so it reports [needsOnboarding].
+  /// Routing on that would flash the setup screen at every returning user for
+  /// the frames between sign-in and the profile landing. AuthGate waits on this
+  /// instead.
+  bool _loaded = false;
+  bool get loaded => _loaded;
+
+  /// Whether this lifter must be sent through setup before the tabs open.
+  /// Only meaningful once [loaded] is true.
+  bool get needsOnboarding => _profile.needsOnboarding;
+
   AppLocale get locale => _profile.locale;
+
+  /// The palette in force. `main` feeds this straight into the MaterialApp's
+  /// theme, so flipping it repaints the whole app, not just the screen that
+  /// toggled it.
+  AppThemeMode get themeMode => _profile.themeMode;
 
   /// The strings for the current language. `context.s` is the shorthand.
   AppStrings get s => AppStrings.of(_profile.locale);
@@ -81,15 +101,23 @@ class AppState extends ChangeNotifier {
       _profile = await service.fetchProfile();
     } finally {
       _loading = false;
+      // Set even when the fetch threw. A failed load must not strand the user
+      // on AuthGate's spinner forever; they fall through to onboarding, which
+      // is recoverable, rather than to a screen with no way out.
+      _loaded = true;
       _notify();
     }
   }
 
-  /// Reset to a signed-out state, keeping the language the user was reading in
-  /// — being thrown back into English at the sign-in screen because you signed
-  /// out would be a bug, not a feature.
+  /// Reset to a signed-out state, keeping the language and the theme the user
+  /// was reading in — being thrown back into English, or into a white flash,
+  /// at the sign-in screen because you signed out would be a bug, not a
+  /// feature.
   void clear() {
-    _profile = Profile(locale: _profile.locale);
+    _profile = Profile(locale: _profile.locale, themeMode: _profile.themeMode);
+    // The next account gets its own profile, and until that lands nothing may
+    // be concluded about whether it has been onboarded.
+    _loaded = false;
     _notify();
   }
 
@@ -109,6 +137,7 @@ class AppState extends ChangeNotifier {
     ActivityLevel? activity,
     double? benchGoalKg,
     AppLocale? locale,
+    AppThemeMode? themeMode,
   }) async {
     final previous = _profile;
     _profile = _profile.copyWith(
@@ -120,6 +149,7 @@ class AppState extends ChangeNotifier {
       activity: activity,
       benchGoalKg: benchGoalKg,
       locale: locale,
+      themeMode: themeMode,
     );
     _notify();
 
@@ -135,6 +165,47 @@ class AppState extends ChangeNotifier {
       _notify();
       rethrow;
     }
+  }
+
+  /// Finish onboarding: the lifter's own metrics, saved, and the gate opened.
+  ///
+  /// The one write in this class that is deliberately NOT optimistic. Everywhere
+  /// else the UI moves first and rolls back on failure, because a language
+  /// switch that waits for the network feels broken. Here the requirement runs
+  /// the other way: the tabs may not open until the profile is actually in
+  /// Supabase. Moving first would let a lifter whose save silently failed spend
+  /// the session training against a goal — and eating against calorie targets —
+  /// that exist only on their screen, and be asked to set it all up again on
+  /// the next launch with no idea why.
+  ///
+  /// So: write, and only then flip [needsOnboarding]. On failure the profile is
+  /// untouched and the error is rethrown for the screen to surface — the gate
+  /// stays shut, which is the honest outcome.
+  Future<void> completeOnboarding({
+    required Gender gender,
+    required double heightCm,
+    required double weightKg,
+    required int age,
+    required double benchGoalKg,
+  }) async {
+    if (service.userId == null) {
+      throw const BackendException('Not signed in.');
+    }
+
+    final next = _profile.copyWith(
+      gender: gender,
+      heightCm: heightCm,
+      weightKg: weightKg,
+      age: age,
+      benchGoalKg: benchGoalKg,
+      // The stamp that says "this lifter has been asked". Nothing else in the
+      // app sets it, and nothing can unset it.
+      onboardedAt: DateTime.now(),
+    );
+
+    await service.saveProfile(next);
+    _profile = next;
+    _notify();
   }
 
   /// Claim a milestone celebration, atomically against the database.

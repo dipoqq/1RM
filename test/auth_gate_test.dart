@@ -3,6 +3,8 @@ import 'package:bench_app/models/profile.dart';
 import 'package:bench_app/services/backend.dart';
 import 'package:bench_app/state/app_state.dart';
 import 'package:bench_app/ui/auth_gate.dart';
+import 'package:bench_app/ui/home_shell.dart';
+import 'package:bench_app/ui/onboarding_screen.dart';
 import 'package:bench_app/ui/widgets/common.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,10 +25,22 @@ void main() {
   // first frame throws LocaleDataException. main() does the same thing at boot.
   setUpAll(initializeDateFormatting);
 
-  Future<void> launch(WidgetTester tester, {bool signedIn = true}) async {
+  Future<void> launch(
+    WidgetTester tester, {
+    bool signedIn = true,
+    Profile? profile,
+  }) async {
     backend = FakeBackend(
       signedIn: signedIn,
-      profile: const Profile(benchGoalKg: 90, locale: AppLocale.en),
+      // Onboarded by default: these tests are about the launch path THROUGH to
+      // the tabs, so the profile has to be one that reaches HomeShell rather
+      // than being held at onboarding. Tests that want the gate pass their own.
+      profile: profile ??
+          Profile(
+            benchGoalKg: 90,
+            locale: AppLocale.en,
+            onboardedAt: DateTime.utc(2026, 1, 1),
+          ),
     );
     state = AppState(backend);
     addTearDown(state.dispose);
@@ -105,5 +119,50 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(SignInScreen), findsOneWidget);
+  });
+
+  testWidgets('a never-onboarded account is held at onboarding, not the tabs',
+      (tester) async {
+    // onboardedAt null: the whole point of the milestone — a brand-new account
+    // must not land on the tabs against the 180/94 defaults.
+    await launch(tester,
+        profile: const Profile(benchGoalKg: 90, locale: AppLocale.en));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OnboardingScreen), findsOneWidget);
+    expect(find.byType(HomeShell), findsNothing);
+  });
+
+  testWidgets('an onboarded account goes straight to the tabs', (tester) async {
+    await launch(tester); // fixture is onboarded
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OnboardingScreen), findsNothing);
+    expect(find.byType(HomeShell), findsOneWidget);
+  });
+
+  testWidgets('completing onboarding swaps the screen for the tabs',
+      (tester) async {
+    await launch(tester,
+        profile: const Profile(benchGoalKg: 90, locale: AppLocale.en));
+    await tester.pumpAndSettle();
+    expect(find.byType(OnboardingScreen), findsOneWidget);
+
+    // The gate is driven entirely by the profile: the moment onboarding is
+    // saved, AuthGate re-runs its branch and shows HomeShell — no navigation.
+    await state.completeOnboarding(
+      gender: Gender.male,
+      heightCm: 178,
+      weightKg: 82,
+      age: 28,
+      benchGoalKg: 100,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(OnboardingScreen), findsNothing);
+    expect(find.byType(HomeShell), findsOneWidget);
+    // And what the tabs run against is what the lifter actually entered.
+    expect(state.profile.weightKg, 82);
+    expect(state.profile.needsOnboarding, isFalse);
   });
 }

@@ -7,6 +7,8 @@ import '../core/theme.dart';
 import '../services/backend.dart';
 import '../state/app_state.dart';
 import 'home_shell.dart';
+import 'onboarding_screen.dart';
+import 'widgets/common.dart' as ui;
 
 /// Shows the sign-in screen until there is a session, then the app.
 ///
@@ -75,9 +77,58 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    // No side effects here — just the branch.
+    // No side effects here — just the branch. `context.app` subscribes this
+    // gate to the profile landing, which is what re-runs the branch below once
+    // load() completes.
+    final state = context.app;
+
     if (!_signedIn) return SignInScreen(state: widget.state);
+
+    // Signed in, but the profile is still in flight. The placeholder profile
+    // AppState starts on has a null onboardedAt, so it reports needsOnboarding
+    // — routing on it here would flash the setup screen at every returning
+    // user for the frames between sign-in and the row landing. Wait instead.
+    if (!state.loaded) return const _ProfileLoading();
+
+    // The gate proper. A lifter who has never been through setup does not get
+    // the tabs: the whole point of the milestone is that nobody trains against
+    // 180 cm / 94 kg because that is what the column defaulted to. Onboarding
+    // is a *replacement* for HomeShell, not a route pushed on top of it, so
+    // there is no back gesture, no Navigator entry and no way around it — the
+    // only exit is completing it, which flips this branch.
+    if (state.needsOnboarding) return OnboardingScreen(state: widget.state);
+
     return HomeShell(state: widget.state);
+  }
+}
+
+/// The gap between "signed in" and "profile in hand".
+class _ProfileLoading extends StatelessWidget {
+  const _ProfileLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2, color: c.accent),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              context.s.loadingProfile,
+              style: TextStyle(color: c.textMid, fontSize: 13),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -136,23 +187,34 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return Scaffold(
       body: SafeArea(
         child: Stack(
           children: [
-            // The language switch is on the sign-in screen, not only inside
-            // Settings: Settings is behind the account, and a Russian speaker
-            // should not have to read an English screen to reach their own
-            // language.
+            // The language and theme switches are on the sign-in screen, not
+            // only inside Settings: Settings is behind the account, and neither
+            // a Russian speaker facing an English screen nor someone wincing at
+            // a white flash should have to sign in first to fix it.
             Align(
               alignment: Alignment.topRight,
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: LanguageToggle(
-                  locale: context.app.locale,
-                  onChanged: (l) => context.app.update(locale: l),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    LanguageToggle(
+                      locale: context.app.locale,
+                      onChanged: (l) => context.app.update(locale: l),
+                    ),
+                    const SizedBox(height: 8),
+                    ui.ThemeToggle(
+                      mode: context.app.themeMode,
+                      onChanged: (m) => context.app.update(themeMode: m),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -165,22 +227,22 @@ class _SignInScreenState extends State<SignInScreen> {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Icon(Icons.fitness_center,
-                          size: 40, color: AppColors.accent),
+                      Icon(Icons.fitness_center,
+                          size: 40, color: c.accent),
                       const SizedBox(height: 16),
                       Text(
                         s.appTitle,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 26,
                             fontWeight: FontWeight.w800,
-                            color: AppColors.textHi),
+                            color: c.textHi),
                       ),
                       const SizedBox(height: 6),
                       Text(
                         _signUp ? s.signUpSubtitle : s.signInSubtitle,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(color: AppColors.textMid),
+                        style: TextStyle(color: c.textMid),
                       ),
                       const SizedBox(height: 26),
                       TextField(
@@ -203,17 +265,17 @@ class _SignInScreenState extends State<SignInScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppColors.dangerTint,
+                            color: c.dangerTint,
                             borderRadius:
                                 BorderRadius.circular(AppRadii.control),
                             border: Border.all(
                                 color:
-                                    AppColors.danger.withValues(alpha: 0.35)),
+                                    c.danger.withValues(alpha: 0.35)),
                           ),
                           child: Text(
                             _error!,
-                            style: const TextStyle(
-                                fontSize: 13, color: AppColors.danger),
+                            style: TextStyle(
+                                fontSize: 13, color: c.danger),
                           ),
                         ),
                       ],
@@ -221,12 +283,12 @@ class _SignInScreenState extends State<SignInScreen> {
                       FilledButton(
                         onPressed: _busy ? null : _submit,
                         child: _busy
-                            ? const SizedBox(
+                            ? SizedBox(
                                 width: 18,
                                 height: 18,
                                 child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    color: AppColors.onAccent),
+                                    color: c.onAccent),
                               )
                             : Text(_signUp ? s.createAccount : s.signIn),
                       ),
@@ -239,7 +301,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                   _error = null;
                                 }),
                         style: TextButton.styleFrom(
-                            foregroundColor: AppColors.textMid),
+                            foregroundColor: c.textMid),
                         child:
                             Text(_signUp ? s.haveAccount : s.createAccount),
                       ),
@@ -269,6 +331,7 @@ class LanguageToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return SegmentedButton<AppLocale>(
       segments: [
         for (final l in AppLocale.values)
@@ -281,11 +344,11 @@ class LanguageToggle extends StatelessWidget {
       showSelectedIcon: false,
       onSelectionChanged: (set) => onChanged(set.first),
       style: SegmentedButton.styleFrom(
-        backgroundColor: AppColors.bgBase,
-        foregroundColor: AppColors.textMid,
-        selectedBackgroundColor: AppColors.accentTint,
-        selectedForegroundColor: AppColors.accentDim,
-        side: const BorderSide(color: AppColors.border),
+        backgroundColor: c.bgBase,
+        foregroundColor: c.textMid,
+        selectedBackgroundColor: c.accentTint,
+        selectedForegroundColor: c.accentDim,
+        side: BorderSide(color: c.border),
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
       ),
     );

@@ -24,6 +24,7 @@ class GenderToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return SegmentedButton<Gender>(
@@ -35,11 +36,61 @@ class GenderToggle extends StatelessWidget {
       showSelectedIcon: false,
       onSelectionChanged: (set) => onChanged(set.first),
       style: SegmentedButton.styleFrom(
-        backgroundColor: AppColors.bgBase,
-        foregroundColor: AppColors.textMid,
-        selectedBackgroundColor: AppColors.accentTint,
-        selectedForegroundColor: AppColors.accentDim,
-        side: const BorderSide(color: AppColors.border),
+        backgroundColor: c.bgBase,
+        foregroundColor: c.textMid,
+        selectedBackgroundColor: c.accentTint,
+        selectedForegroundColor: c.accentDim,
+        side: BorderSide(color: c.border),
+        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+/// Dark / Light, in the same segmented style as the language and gender
+/// switches.
+///
+/// The icons carry the meaning as well as the words: this control appears on
+/// the sign-in screen, where a user who has landed in the wrong language still
+/// needs to be able to find it.
+class ThemeToggle extends StatelessWidget {
+  const ThemeToggle({
+    super.key,
+    required this.mode,
+    required this.onChanged,
+  });
+
+  final AppThemeMode mode;
+  final ValueChanged<AppThemeMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = context.s;
+
+    return SegmentedButton<AppThemeMode>(
+      segments: [
+        for (final m in AppThemeMode.values)
+          ButtonSegment(
+            value: m,
+            icon: Icon(
+              m == AppThemeMode.dark
+                  ? Icons.dark_mode_outlined
+                  : Icons.light_mode_outlined,
+              size: 16,
+            ),
+            label: Text(s.themeLabel(m)),
+          ),
+      ],
+      selected: {mode},
+      showSelectedIcon: false,
+      onSelectionChanged: (set) => onChanged(set.first),
+      style: SegmentedButton.styleFrom(
+        backgroundColor: c.bgBase,
+        foregroundColor: c.textMid,
+        selectedBackgroundColor: c.accentTint,
+        selectedForegroundColor: c.accentDim,
+        side: BorderSide(color: c.border),
         textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
       ),
     );
@@ -77,14 +128,15 @@ class SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Material(
-      color: AppColors.card,
+      color: c.card,
       elevation: 0,
       // The hairline border and the 16 px radius, exactly as before — carried
       // by the Material's shape instead of a BoxDecoration.
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadii.card),
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: c.border),
       ),
       child: Padding(
         padding: padding,
@@ -98,11 +150,11 @@ class SectionCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title!.toUpperCase(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         letterSpacing: 0.9,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textLow,
+                        color: c.textLow,
                       ),
                     ),
                   ),
@@ -145,10 +197,11 @@ class MacroRing extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
     final ratio = target <= 0 ? 0.0 : value / target;
     final over = ratio > 1.0;
-    final ringColor = over ? AppColors.warning : color;
+    final ringColor = over ? c.warning : color;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -161,24 +214,25 @@ class MacroRing extends StatelessWidget {
             duration: const Duration(milliseconds: 550),
             curve: Curves.easeOutCubic,
             builder: (context, t, _) => CustomPaint(
-              painter: _RingPainter(progress: t, color: ringColor),
+              painter: _RingPainter(
+                  progress: t, color: ringColor, trackColor: c.border),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       value.round().toString(),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textHi,
+                        color: c.textHi,
                       ),
                     ),
                     Text(
                       '/ $target $unit',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: AppColors.textLow,
+                        color: c.textLow,
                       ),
                     ),
                   ],
@@ -190,10 +244,10 @@ class MacroRing extends StatelessWidget {
         const SizedBox(height: 10),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: AppColors.textMid,
+            color: c.textMid,
           ),
         ),
         Text(
@@ -203,7 +257,7 @@ class MacroRing extends StatelessWidget {
           style: TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
-            color: over ? AppColors.warning : AppColors.textLow,
+            color: over ? c.warning : c.textLow,
           ),
         ),
       ],
@@ -212,10 +266,19 @@ class MacroRing extends StatelessWidget {
 }
 
 class _RingPainter extends CustomPainter {
-  const _RingPainter({required this.progress, required this.color});
+  const _RingPainter({
+    required this.progress,
+    required this.color,
+    required this.trackColor,
+  });
 
   final double progress;
   final Color color;
+
+  /// The unfilled part of the ring. Passed in rather than read from a palette:
+  /// a CustomPainter has no BuildContext, and hard-coding it would leave one
+  /// grey circle behind when the theme flips.
+  final Color trackColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -228,7 +291,7 @@ class _RingPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = stroke
       ..strokeCap = StrokeCap.round
-      ..color = AppColors.border;
+      ..color = trackColor;
 
     final fill = Paint()
       ..style = PaintingStyle.stroke
@@ -248,7 +311,9 @@ class _RingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RingPainter old) =>
-      old.progress != progress || old.color != color;
+      old.progress != progress ||
+      old.color != color ||
+      old.trackColor != trackColor;
 }
 
 /// Randomised iron/discipline quote.
@@ -274,6 +339,7 @@ class QuoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final quotes = context.s.quotes;
     final quote = quotes[(pick * quotes.length).floor() % quotes.length];
 
@@ -281,29 +347,29 @@ class QuoteCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.accentTint,
+        color: c.accentTint,
         borderRadius: BorderRadius.circular(AppRadii.card),
-        border: Border.all(color: AppColors.accent.withValues(alpha: 0.22)),
+        border: Border.all(color: c.accent.withValues(alpha: 0.22)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             '"${quote.text}"',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               height: 1.5,
               fontStyle: FontStyle.italic,
-              color: AppColors.textHi,
+              color: c.textHi,
             ),
           ),
           const SizedBox(height: 10),
           Text(
             '— ${quote.author}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
-              color: AppColors.accentDim,
+              color: c.accentDim,
             ),
           ),
         ],
@@ -333,6 +399,7 @@ class Banner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -361,10 +428,10 @@ class Banner extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   message,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
-                    color: AppColors.textMid,
+                    color: c.textMid,
                   ),
                 ),
                 if (action != null) ...[

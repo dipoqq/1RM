@@ -184,7 +184,9 @@ class _NutritionTabState extends State<NutritionTab> {
         text: _describeCtrl.text,
         image: _image,
         imageMime: _imageMime,
-        targets: _profile.targets,
+        // The signed-in user's own body — height, weight, age and gender all
+        // reach the prompt from here.
+        profile: _profile,
         eaten: MacroTotals.of(_meals),
         day: day,
         // Gemini answers in the language the app is being read in.
@@ -228,18 +230,19 @@ class _NutritionTabState extends State<NutritionTab> {
 
   Future<void> _clearDay() async {
     final s = context.s;
+    final c = context.colors;
     final label = DateFormat('MMMM d', s.locale.code).format(_selected);
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppColors.bgBase,
+        backgroundColor: c.bgBase,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.card),
         ),
         title: Text(s.clearDayTitle),
         content: Text(
           s.clearDayBody(_meals.length, label),
-          style: const TextStyle(color: AppColors.textMid, height: 1.5),
+          style: TextStyle(color: c.textMid, height: 1.5),
         ),
         actions: [
           TextButton(
@@ -248,7 +251,7 @@ class _NutritionTabState extends State<NutritionTab> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: AppColors.danger),
+            style: FilledButton.styleFrom(backgroundColor: c.danger),
             child: Text(s.delete),
           ),
         ],
@@ -270,6 +273,7 @@ class _NutritionTabState extends State<NutritionTab> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
     // Subscribes this tab to the profile: a bodyweight edit, or a language
     // switch made over in Settings, rebuilds the targets and the copy here.
@@ -290,13 +294,13 @@ class _NutritionTabState extends State<NutritionTab> {
             title: s.viewingHistory(
                 DateFormat('MMMM d, y', s.locale.code).format(_selected)),
             message: s.viewingHistoryBody,
-            color: AppColors.warning,
-            tint: AppColors.warningTint,
+            color: c.warning,
+            tint: c.warningTint,
             action: FilledButton.tonal(
               onPressed: () => _selectDay(_today),
               style: FilledButton.styleFrom(
-                backgroundColor: AppColors.warning,
-                foregroundColor: AppColors.onAccent,
+                backgroundColor: c.warning,
+                foregroundColor: c.onAccent,
                 minimumSize: const Size(0, 40),
               ),
               child: Text(s.backToToday),
@@ -350,11 +354,12 @@ class _NutritionTabState extends State<NutritionTab> {
   }
 
   void _openManualSheet(BuildContext context) {
+    final c = context.colors;
     final state = widget.state;
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.bgBase,
+      backgroundColor: c.bgBase,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -403,6 +408,7 @@ class _GoalsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
     final t = profile.targets;
 
@@ -452,7 +458,7 @@ class _GoalsCard extends StatelessWidget {
           // every number in this card.
           Text(
             s.gender,
-            style: const TextStyle(fontSize: 12, color: AppColors.textLow),
+            style: TextStyle(fontSize: 12, color: c.textLow),
           ),
           const SizedBox(height: 6),
           ui.GenderToggle(
@@ -501,7 +507,7 @@ class _GoalsCard extends StatelessWidget {
               s.activityLabel(profile.activity),
               t.tdee.round(),
             ),
-            style: const TextStyle(fontSize: 11, color: AppColors.textLow),
+            style: TextStyle(fontSize: 11, color: c.textLow),
           ),
 
           const SizedBox(height: 14),
@@ -512,7 +518,7 @@ class _GoalsCard extends StatelessWidget {
                   value: '${t.kcal}',
                   unit: s.unitKcal,
                   detail: s.tdeeAnd(s.goalDelta(profile.goal)),
-                  color: AppColors.accent,
+                  color: c.accent,
                 ),
               ),
               const SizedBox(width: 10),
@@ -521,7 +527,7 @@ class _GoalsCard extends StatelessWidget {
                   value: '${t.protein}',
                   unit: s.gProtein,
                   detail: s.proteinPerKg(ui.fmtKg(profile.weightKg)),
-                  color: AppColors.success,
+                  color: c.success,
                 ),
               ),
             ],
@@ -534,7 +540,7 @@ class _GoalsCard extends StatelessWidget {
                   value: '${t.carbs}',
                   unit: s.gCarbs,
                   detail: s.remainingCalories,
-                  color: AppColors.carbs,
+                  color: c.carbs,
                 ),
               ),
               const SizedBox(width: 10),
@@ -543,7 +549,7 @@ class _GoalsCard extends StatelessWidget {
                   value: '${t.fats}',
                   unit: s.gFats,
                   detail: s.fatsShare(t.kcal),
-                  color: AppColors.fats,
+                  color: c.fats,
                 ),
               ),
             ],
@@ -612,45 +618,46 @@ class _TargetTile extends StatelessWidget {
   final Color color;
 
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.bgBase,
-          borderRadius: BorderRadius.circular(AppRadii.control),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(value,
-                    style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w800,
-                        color: color,
-                        height: 1)),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(unit,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          fontSize: 12, color: AppColors.textLow)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(detail,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(fontSize: 11, color: AppColors.textLow)),
-          ],
-        ),
-      );
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: c.bgBase,
+        borderRadius: BorderRadius.circular(AppRadii.control),
+        border: Border.all(color: c.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: color,
+                      height: 1)),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(unit,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: c.textLow)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(detail,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11, color: c.textLow)),
+        ],
+      ),
+    );
+  }
 }
 
 /// The four macro rings for the selected day.
@@ -677,6 +684,7 @@ class _RingsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return ui.SectionCard(
@@ -700,7 +708,7 @@ class _RingsCard extends StatelessWidget {
                     value: totals.calories,
                     target: targets.kcal,
                     unit: s.unitKcal,
-                    color: AppColors.accent,
+                    color: c.accent,
                     size: size,
                   ),
                   ui.MacroRing(
@@ -708,7 +716,7 @@ class _RingsCard extends StatelessWidget {
                     value: totals.protein,
                     target: targets.protein,
                     unit: s.unitGrams,
-                    color: AppColors.success,
+                    color: c.success,
                     size: size,
                   ),
                   ui.MacroRing(
@@ -716,7 +724,7 @@ class _RingsCard extends StatelessWidget {
                     value: totals.carbs,
                     target: targets.carbs,
                     unit: s.unitGrams,
-                    color: AppColors.carbs,
+                    color: c.carbs,
                     size: size,
                   ),
                   ui.MacroRing(
@@ -724,7 +732,7 @@ class _RingsCard extends StatelessWidget {
                     value: totals.fats,
                     target: targets.fats,
                     unit: s.unitGrams,
-                    color: AppColors.fats,
+                    color: c.fats,
                     size: size,
                   ),
                 ];
@@ -766,6 +774,7 @@ class _AnalyzeCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return ui.SectionCard(
@@ -781,7 +790,7 @@ class _AnalyzeCard extends StatelessWidget {
             decoration: InputDecoration(
               hintText: s.describeHint,
               hintStyle:
-                  const TextStyle(color: AppColors.textLow, fontSize: 13),
+                  TextStyle(color: c.textLow, fontSize: 13),
             ),
           ),
           const SizedBox(height: 12),
@@ -825,8 +834,8 @@ class _AnalyzeCard extends StatelessWidget {
                   label: Text(s.upload, overflow: TextOverflow.ellipsis),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 44),
-                    foregroundColor: AppColors.textMid,
-                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: c.textMid,
+                    side: BorderSide(color: c.border),
                   ),
                 ),
               ),
@@ -839,8 +848,8 @@ class _AnalyzeCard extends StatelessWidget {
                   label: Text(s.camera, overflow: TextOverflow.ellipsis),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(0, 44),
-                    foregroundColor: AppColors.textMid,
-                    side: const BorderSide(color: AppColors.border),
+                    foregroundColor: c.textMid,
+                    side: BorderSide(color: c.border),
                   ),
                 ),
               ),
@@ -853,11 +862,11 @@ class _AnalyzeCard extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: onAnalyze,
               icon: analyzing
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: AppColors.onAccent),
+                          strokeWidth: 2, color: c.onAccent),
                     )
                   : const Icon(Icons.auto_awesome, size: 18),
               label: Text(analyzing ? s.analyzing : s.analyzeFood),
@@ -870,14 +879,14 @@ class _AnalyzeCard extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: AppColors.bgBase,
+                color: c.bgBase,
                 borderRadius: BorderRadius.circular(AppRadii.control),
-                border: Border.all(color: AppColors.border),
+                border: Border.all(color: c.border),
               ),
               child: SelectableText(
                 analysis!,
-                style: const TextStyle(
-                    fontSize: 13, height: 1.5, color: AppColors.textMid),
+                style: TextStyle(
+                    fontSize: 13, height: 1.5, color: c.textMid),
               ),
             ),
           ],
@@ -888,7 +897,7 @@ class _AnalyzeCard extends StatelessWidget {
               onPressed: analyzing ? null : onManual,
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: Text(s.addManually),
-              style: TextButton.styleFrom(foregroundColor: AppColors.textMid),
+              style: TextButton.styleFrom(foregroundColor: c.textMid),
             ),
           ),
         ],
@@ -910,6 +919,7 @@ class _MealsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return ui.SectionCard(
@@ -919,7 +929,7 @@ class _MealsCard extends StatelessWidget {
           : TextButton(
               onPressed: onClearDay,
               style: TextButton.styleFrom(
-                foregroundColor: AppColors.danger,
+                foregroundColor: c.danger,
                 minimumSize: const Size(0, 30),
                 padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
@@ -931,7 +941,7 @@ class _MealsCard extends StatelessWidget {
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(s.nothingLogged,
-                  style: const TextStyle(color: AppColors.textLow)),
+                  style: TextStyle(color: c.textLow)),
             )
           : Column(
               children: [
@@ -945,16 +955,16 @@ class _MealsCard extends StatelessWidget {
                           children: [
                             Text(
                               meals[i].name,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: AppColors.textHi),
+                                  color: c.textHi),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               _mealSummary(s, meals[i]),
-                              style: const TextStyle(
-                                  fontSize: 12, color: AppColors.textLow),
+                              style: TextStyle(
+                                  fontSize: 12, color: c.textLow),
                             ),
                           ],
                         ),
@@ -962,7 +972,7 @@ class _MealsCard extends StatelessWidget {
                       IconButton(
                         onPressed: () => onDelete(meals[i]),
                         icon: const Icon(Icons.delete_outline, size: 18),
-                        color: AppColors.textLow,
+                        color: c.textLow,
                         tooltip: s.delete,
                       ),
                     ],
@@ -1032,6 +1042,7 @@ class _ManualMealSheetState extends State<_ManualMealSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final s = context.s;
 
     return Padding(
@@ -1048,10 +1059,10 @@ class _ManualMealSheetState extends State<_ManualMealSheet> {
           Text(
             s.addMealOn(
                 DateFormat('MMMM d', s.locale.code).format(widget.day)),
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w700,
-                color: AppColors.textHi),
+                color: c.textHi),
           ),
           const SizedBox(height: 16),
           TextField(
