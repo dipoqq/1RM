@@ -70,11 +70,16 @@ void main() {
     await launch(tester);
     await tester.pumpAndSettle();
 
+    // `.first` must scope to Text widgets INSIDE the QuoteCard — applied to the
+    // whole tree it picks up the AppBar's leading text instead, which is the
+    // first Text globally.
     String currentQuote() => tester
-        .widget<Text>(find.descendant(
-          of: find.byType(QuoteCard),
-          matching: find.byType(Text).first,
-        ))
+        .widget<Text>(find
+            .descendant(
+              of: find.byType(QuoteCard),
+              matching: find.byType(Text),
+            )
+            .first)
         .data!;
 
     final before = currentQuote();

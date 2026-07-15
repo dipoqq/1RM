@@ -5,6 +5,7 @@ import '../core/l10n/app_locale.dart';
 import '../core/l10n/app_strings.dart';
 import '../core/theme_mode.dart';
 import '../models/profile.dart';
+import '../models/workout.dart';
 import '../services/backend.dart';
 
 /// The single source of truth for everything that must stay in step across the
@@ -28,6 +29,16 @@ class AppState extends ChangeNotifier {
 
   Profile _profile;
   Profile get profile => _profile;
+
+  Exercise _activeExercise = Exercise.benchPress;
+  Exercise get activeExercise => _activeExercise;
+
+  void setActiveExercise(Exercise exercise) {
+    if (_activeExercise != exercise) {
+      _activeExercise = exercise;
+      _notify();
+    }
+  }
 
   bool _loading = false;
   bool get loading => _loading;
@@ -55,6 +66,15 @@ class AppState extends ChangeNotifier {
 
   /// The strings for the current language. `context.s` is the shorthand.
   AppStrings get s => AppStrings.of(_profile.locale);
+
+  /// The permanent ledger of achievement ids already celebrated, loaded from
+  /// Supabase at sign-in. Anything in here has fired its toast/confetti once and
+  /// must never fire again — the guard that stops a deleted-then-re-added
+  /// workout from re-celebrating. Milestone kg thresholds live on the profile
+  /// (`celebratedMilestones`); the named achievements and the 50/100% progress
+  /// bursts live here.
+  final Set<String> _claimedAchievements = {};
+  bool hasClaimedAchievement(String id) => _claimedAchievements.contains(id);
 
   bool _disposed = false;
 
@@ -99,6 +119,17 @@ class AppState extends ChangeNotifier {
     _notify();
     try {
       _profile = await service.fetchProfile();
+      // Load the celebration ledger alongside the profile. A failure here must
+      // not strand the user, so it is swallowed to an empty set — the worst case
+      // is one extra toast, never a blocked sign-in.
+      try {
+        final claimed = await service.fetchUnlockedAchievements();
+        _claimedAchievements
+          ..clear()
+          ..addAll(claimed);
+      } catch (_) {
+        _claimedAchievements.clear();
+      }
     } finally {
       _loading = false;
       // Set even when the fetch threw. A failed load must not strand the user
@@ -118,6 +149,8 @@ class AppState extends ChangeNotifier {
     // The next account gets its own profile, and until that lands nothing may
     // be concluded about whether it has been onboarded.
     _loaded = false;
+    // The ledger is per-account; the next sign-in reloads its own.
+    _claimedAchievements.clear();
     _notify();
   }
 
@@ -136,6 +169,8 @@ class AppState extends ChangeNotifier {
     Goal? goal,
     ActivityLevel? activity,
     double? benchGoalKg,
+    double? squatGoalKg,
+    double? deadliftGoalKg,
     AppLocale? locale,
     AppThemeMode? themeMode,
   }) async {
@@ -148,6 +183,8 @@ class AppState extends ChangeNotifier {
       goal: goal,
       activity: activity,
       benchGoalKg: benchGoalKg,
+      squatGoalKg: squatGoalKg,
+      deadliftGoalKg: deadliftGoalKg,
       locale: locale,
       themeMode: themeMode,
     );
@@ -222,6 +259,19 @@ class AppState extends ChangeNotifier {
       );
       _notify();
     }
+    return claimed;
+  }
+
+  /// Claim an achievement celebration, against the permanent ledger.
+  ///
+  /// Returns true only if this call is the one that first recorded it — the
+  /// caller may then fire the toast/confetti. A no-op returning false if the id
+  /// is already known locally (the fast path that stops a re-added workout from
+  /// re-celebrating) or already in the ledger server-side.
+  Future<bool> claimAchievement(String id) async {
+    if (_claimedAchievements.contains(id)) return false;
+    final claimed = await service.recordAchievement(id);
+    if (claimed) _claimedAchievements.add(id);
     return claimed;
   }
 }

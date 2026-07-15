@@ -64,6 +64,17 @@ void main() {
     });
   });
 
+  group('progressFor multi-lift', () {
+    Profile multiGoal(double b, double s, double d) => Profile(benchGoalKg: b, squatGoalKg: s, deadliftGoalKg: d);
+
+    test('swapping exercises uses the correct goal', () {
+      final p = multiGoal(90, 100, 120);
+      expect(p.progressFor(45, p.benchGoalKg).percent, 50);
+      expect(p.progressFor(50, p.squatGoalKg).percent, 50);
+      expect(p.progressFor(60, p.deadliftGoalKg).percent, 50);
+    });
+  });
+
   group('goal validation', () {
     test('accepts a sane custom target, rejects a typo', () {
       expect(Profile.isValidGoal(90), isTrue);

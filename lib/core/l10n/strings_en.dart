@@ -426,4 +426,106 @@ class EnStrings implements AppStrings {
 
   @override
   String get geminiReplyLanguage => 'Reply in English.';
+
+  // -- hydration -------------------------------------------------------------
+  @override
+  String get hydrationTitle => 'Hydration';
+  @override
+  String hydrationLogged(int current, int target) => '$current / $target ml';
+
+  // -- reminders -------------------------------------------------------------
+  @override
+  String get remindersTitle => 'Reminders';
+  @override
+  String get reminderTakeCreatine => 'Take Creatine';
+  @override
+  String get reminderEatMeal => 'Eat Meal';
+  @override
+  String get reminderHydrate => 'Hydrate';
+  @override
+  String get reminderWorkoutTime => 'Workout Time';
+  @override
+  String get reminderNoTime => 'No time set';
+  @override
+  String get reminderTapToSchedule => 'Tap to schedule';
+  @override
+  String get reminderAddTime => 'Add time';
+
+  // -- history / progress ----------------------------------------------------
+  @override
+  String get historyTitle => 'Progress';
+  @override
+  String get historyChartTitle => 'Estimated 1RM over time';
+  @override
+  String get historyPersonalRecords => 'Personal records';
+  @override
+  String get historyNoData => 'Log a session to see your progress here.';
+  @override
+  String historySinceStart(String kg) => '+$kg kg since start';
+
+  // -- achievements ----------------------------------------------------------
+  @override
+  String get achievementsTitle => 'Achievements';
+  @override
+  String get achievementsBenchPress => 'Bench Press';
+  @override
+  String get achievementsSquats => 'Squats';
+  @override
+  String get achievementsDeadlift => 'Deadlift';
+  @override
+  String get achievementsEasterEggs => 'Fun & Easter Eggs';
+  @override
+  String get achievementNotUnlocked => 'This achievement is not unlocked yet';
+  @override
+  String achievementUnlockedToast(String title) => 'Achievement unlocked: $title';
+  @override
+  String achievementUnlockedAt(String date) => 'Unlocked: $date';
+
+  @override
+  String achievementTitle(String id) => switch (id) {
+        'bench_50' => 'Bar and two cookies',
+        'bench_80' => 'No longer embarrassing',
+        'bench_100' => 'Who do you think you are?',
+        'bench_120' => 'The gym boss',
+        'bench_150' => 'Human jack',
+        'squat_60' => 'Leg day? Never heard of it',
+        'squat_100' => 'Knees have left the chat',
+        'squat_140' => 'Jeans tore',
+        'squat_180' => 'Quads like bazookas',
+        'squat_200' => 'Gravity is a myth',
+        'deadlift_100' => 'Back is still there',
+        'deadlift_150' => 'Osteopath sponsor',
+        'deadlift_200' => 'Mini tractor',
+        'deadlift_250' => 'Level 80 loader',
+        'deadlift_300' => 'Lifted the couch with dad',
+        'fun_bar_won' => 'The bar won',
+        'fun_step_back' => 'Step back, two forward',
+        'fun_early_bird' => 'Early bird psycho',
+        'fun_night_owl' => 'Gym is closed, go to sleep!',
+        _ => 'Unknown Achievement',
+      };
+
+  @override
+  String achievementDesc(String id) => switch (id) {
+        'bench_50' => 'Benched 50 kg! A good start, you earned those cookies.',
+        'bench_80' => 'Benched 80 kg! They don\'t look at you with pity anymore.',
+        'bench_100' => 'Benched 100 kg! Officially a respectable human.',
+        'bench_120' => 'Benched 120 kg! In spring, all equipment is yours by right.',
+        'bench_150' => 'Benched 150 kg! Physics left the chat, you are a machine.',
+        'squat_60' => 'Squatted 60 kg! At least your legs are present.',
+        'squat_100' => 'Squatted 100 kg! Hear that crunch? That\'s respect.',
+        'squat_140' => 'Squatted 140 kg! Gotta buy new jeans, quads don\'t fit.',
+        'squat_180' => 'Squatted 180 kg! Your legs can shift tectonic plates.',
+        'squat_200' => 'Squatted 200 kg! Earth tries to pull you, but you\'re stronger.',
+        'deadlift_100' => 'Pulled 100 kg! Hello protrusions.',
+        'deadlift_150' => 'Pulled 150 kg! Your chiropractor is buying a new car.',
+        'deadlift_200' => 'Pulled 200 kg! Can tow a car without a cable.',
+        'deadlift_250' => 'Pulled 250 kg! You can unload a truck with a glare.',
+        'deadlift_300' => 'Pulled 300 kg! Legendary strength, dad is proud.',
+        'fun_bar_won' => 'Not your day. The bar was stronger today, but you\'ll be back.',
+        'fun_step_back' => 'A smart athlete knows when to step back to shoot forward.',
+        'fun_early_bird' => 'Training at dawn? You are either a genius or a madman.',
+        'fun_night_owl' => 'Midnight snack or midnight bench? Go to bed, muscles grow in your sleep!',
+        _ => '',
+      };
 }

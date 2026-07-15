@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rounded dark card matching the app's dark/mint identity. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#16201C" />
+    <corners android:radius="18dp" />
+    <stroke
+        android:width="1dp"
+        android:color="#26332E" />
+</shape>

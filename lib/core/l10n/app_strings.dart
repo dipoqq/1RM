@@ -206,4 +206,40 @@ abstract interface class AppStrings {
   /// Instruction appended to the Gemini system prompt so the nutritionist
   /// answers in the language the user is reading the app in.
   String get geminiReplyLanguage;
+
+  // -- hydration -------------------------------------------------------------
+  String get hydrationTitle;
+  String hydrationLogged(int current, int target);
+
+  // -- reminders -------------------------------------------------------------
+  String get remindersTitle;
+  String get reminderTakeCreatine;
+  String get reminderEatMeal;
+  String get reminderHydrate;
+  String get reminderWorkoutTime;
+  String get reminderNoTime;
+  String get reminderTapToSchedule;
+  String get reminderAddTime;
+
+  // -- history / progress ----------------------------------------------------
+  String get historyTitle;
+  String get historyChartTitle;
+  String get historyPersonalRecords;
+  String get historyNoData;
+
+  /// e.g. "+15 kg since start".
+  String historySinceStart(String kg);
+
+  // -- achievements ----------------------------------------------------------
+  String get achievementsTitle;
+  String get achievementsBenchPress;
+  String get achievementsSquats;
+  String get achievementsDeadlift;
+  String get achievementsEasterEggs;
+  String get achievementNotUnlocked;
+  String achievementUnlockedToast(String title);
+  String achievementUnlockedAt(String date);
+
+  String achievementTitle(String id);
+  String achievementDesc(String id);
 }

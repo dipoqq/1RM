@@ -1,11 +1,24 @@
 import '../core/constants.dart';
 import '../core/progression.dart';
 
+enum Exercise {
+  benchPress('Bench Press'),
+  squat('Squat'),
+  deadlift('Deadlift');
+
+  const Exercise(this.label);
+  final String label;
+
+  static Exercise fromLabel(String? label) =>
+      values.firstWhere((e) => e.label == label, orElse: () => benchPress);
+}
+
 /// A single logged bench press session.
 class Workout {
   const Workout({
     this.id,
     required this.date,
+    this.exercise = Exercise.benchPress,
     required this.workoutType,
     required this.weight,
     required this.reps,
@@ -16,6 +29,7 @@ class Workout {
 
   final String? id; // null until Supabase assigns one
   final DateTime date;
+  final Exercise exercise;
   final String workoutType;
   final double weight; // kg
   final int reps;
@@ -38,6 +52,7 @@ class Workout {
   factory Workout.fromJson(Map<String, dynamic> json) => Workout(
         id: json['id'] as String?,
         date: DateTime.parse(json['date'] as String).toLocal(),
+        exercise: Exercise.fromLabel(json['exercise'] as String?),
         workoutType: json['workout_type'] as String,
         weight: (json['weight'] as num).toDouble(),
         reps: (json['reps'] as num).toInt(),
@@ -50,6 +65,7 @@ class Workout {
   /// SupabaseService injects the latter.
   Map<String, dynamic> toInsert() => {
         'date': date.toUtc().toIso8601String(),
+        'exercise': exercise.label,
         'workout_type': workoutType,
         'weight': weight,
         'reps': reps,
@@ -71,6 +87,9 @@ class WorkoutHistory {
   const WorkoutHistory(this.all);
 
   final List<Workout> all;
+
+  WorkoutHistory forExercise(Exercise exercise) =>
+      WorkoutHistory(all.where((w) => w.exercise == exercise).toList());
 
   List<Workout> get heavy => all.where((w) => w.isHeavy).toList();
 

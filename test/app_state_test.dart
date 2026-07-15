@@ -1,6 +1,7 @@
 import 'package:bench_app/core/l10n/app_locale.dart';
 import 'package:bench_app/core/theme_mode.dart';
 import 'package:bench_app/models/profile.dart';
+import 'package:bench_app/models/workout.dart';
 import 'package:bench_app/state/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -88,6 +89,17 @@ void main() {
       // The same 1RM, a new goal, a new percentage — with no refetch and no
       // setState in the widget that displays it.
       expect(find.text('100% of goal'), findsOneWidget);
+    });
+
+    testWidgets('changing active exercise updates the state', (tester) async {
+      build();
+      expect(state.activeExercise, Exercise.benchPress);
+      state.setActiveExercise(Exercise.squat);
+      expect(state.activeExercise, Exercise.squat);
+      
+      // Update squat goal and check
+      await state.update(squatGoalKg: 105);
+      expect(state.profile.squatGoalKg, 105);
     });
   });
 

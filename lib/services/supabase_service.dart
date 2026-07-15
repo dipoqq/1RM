@@ -155,16 +155,48 @@ class SupabaseService implements Backend {
     await _client.from('profiles').upsert(p.toUpsert(_uid));
   }
 
-  /// Re-reads the profile first, so a second device that already celebrated
-  /// 80 kg cannot celebrate it again. This is what makes "for the first time"
-  /// actually hold across restarts and devices.
+  /// Claim a milestone celebration atomically, server-side.
+  ///
+  /// Delegates to the `claim_milestone` Postgres function (migration 008), which
+  /// folds the "not already celebrated" check and the array append into one
+  /// locked UPDATE. That is what makes "for the first time" actually hold when
+  /// two devices cross the same milestone at once — the old fetch-then-save here
+  /// had a read-modify-write race that let both of them fire the confetti.
+  ///
+  /// Returns true only if THIS call is the one that claimed it.
   @override
   Future<bool> claimMilestone(double kg) async {
-    final current = await fetchProfile();
-    if (current.hasCelebrated(kg)) return false;
-    await saveProfile(current.copyWith(
-      celebratedMilestones: [...current.celebratedMilestones, kg],
-    ));
-    return true;
+    final claimed =
+        await _client.rpc('claim_milestone', params: {'p_kg': kg});
+    return claimed as bool;
+  }
+
+  // -- achievement ledger ----------------------------------------------------
+
+  @override
+  Future<Set<String>> fetchUnlockedAchievements() async {
+    final rows = await _client
+        .from('unlocked_achievements')
+        .select('achievement_id')
+        .eq('user_id', _uid);
+    return (rows as List)
+        .map((r) => r['achievement_id'] as String)
+        .toSet();
+  }
+
+  /// Insert with `on conflict do nothing` (ignoreDuplicates), then `select()`
+  /// the RETURNING rows. A first-time insert returns the row; a duplicate
+  /// returns nothing — so a non-empty result means THIS call claimed it. This is
+  /// what keeps a delete-and-re-add from re-firing the celebration.
+  @override
+  Future<bool> recordAchievement(String id) async {
+    final rows = await _client
+        .from('unlocked_achievements')
+        .upsert(
+          {'user_id': _uid, 'achievement_id': id},
+          ignoreDuplicates: true,
+        )
+        .select('achievement_id');
+    return (rows as List).isNotEmpty;
   }
 }

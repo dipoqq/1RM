@@ -10,6 +10,7 @@ import '../../core/theme.dart';
 import '../../models/meal.dart';
 import '../../models/profile.dart';
 import '../../services/gemini_service.dart';
+import '../../services/local_storage.dart';
 import '../../state/app_state.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/calendar_strip.dart';
@@ -57,6 +58,9 @@ class _NutritionTabState extends State<NutritionTab> {
   void initState() {
     super.initState();
     _load();
+    LocalStorage.init().then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -325,6 +329,18 @@ class _NutritionTabState extends State<NutritionTab> {
           loading: _loading,
           totals: totals,
           targets: targets,
+        ),
+        _HydrationCard(
+          day: _selected,
+          profile: profile,
+          onAdd: () async {
+            await LocalStorage.addWaterMl(_selected, 250);
+            if (mounted) setState(() {});
+          },
+          onRemove: () async {
+            await LocalStorage.addWaterMl(_selected, -250);
+            if (mounted) setState(() {});
+          },
         ),
       ],
       secondary: [
@@ -747,6 +763,86 @@ class _RingsCard extends StatelessWidget {
                 );
               },
             ),
+    );
+  }
+}
+
+class _HydrationCard extends StatelessWidget {
+  final DateTime day;
+  final Profile profile;
+  final VoidCallback onAdd;
+  final VoidCallback onRemove;
+
+  const _HydrationCard({
+    required this.day,
+    required this.profile,
+    required this.onAdd,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final s = context.s;
+    final c = context.colors;
+    
+    final currentMl = LocalStorage.getWaterMl(day);
+    final targetMl = (profile.weightKg * (profile.gender == Gender.male ? 35 : 31)).round();
+    final progress = targetMl > 0 ? (currentMl / targetMl).clamp(0.0, 1.0) : 0.0;
+
+    return ui.SectionCard(
+      title: s.hydrationTitle,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 80,
+            height: 80,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 8,
+                  backgroundColor: c.border,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                ),
+                Icon(Icons.water_drop, color: Colors.blue, size: 32),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  s.hydrationLogged(currentMl, targetMl),
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: c.textHi),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    FilledButton.icon(
+                      onPressed: onAdd,
+                      icon: const Icon(Icons.add),
+                      label: const Text('250 ml'),
+                      style: FilledButton.styleFrom(backgroundColor: Colors.blue),
+                    ),
+                    const SizedBox(width: 8),
+                    // Secondary "undo a glass" action. Disabled at 0 so the
+                    // button reads as unavailable rather than silently clamping.
+                    IconButton.outlined(
+                      onPressed: currentMl > 0 ? onRemove : null,
+                      icon: const Icon(Icons.remove),
+                      tooltip: '-250 ml',
+                      color: Colors.blue,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

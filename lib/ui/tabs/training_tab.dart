@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +11,8 @@ import '../../core/theme.dart';
 import '../../models/profile.dart';
 import '../../models/workout.dart';
 import '../../state/app_state.dart';
+import '../../services/widget_service.dart';
+import '../../core/achievements.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart' as ui;
 import '../widgets/confetti.dart';
@@ -97,25 +101,36 @@ class _TrainingTabState extends State<TrainingTab> {
 
   Future<void> _log() async {
     final s = context.s;
+    // Capture the messenger BEFORE any await. ScaffoldMessengerState survives
+    // even if this tab is deactivated mid-save, so a snackbar can still be shown
+    // without looking `context` up again across an async gap — which is exactly
+    // what threw "Looking up a deactivated widget's ancestor is unsafe".
+    final messenger = ScaffoldMessenger.of(context);
+
     final weight = double.tryParse(_weightCtrl.text.replaceAll(',', '.'));
     final reps = int.tryParse(_repsCtrl.text);
     final sets = int.tryParse(_setsCtrl.text);
     if (weight == null || weight <= 0 || reps == null || reps <= 0 ||
         sets == null || sets <= 0) {
-      _snack(s.enterPositiveNumbers);
+      _snack(messenger, s.enterPositiveNumbers);
       return;
     }
 
     setState(() => _saving = true);
     try {
+      final oldHistory = _history;
+      final oldAchievements = AchievementsEngine.evaluate(oldHistory, widget.state);
+
       await widget.state.service.addWorkout(Workout(
         date: DateTime.now(),
+        exercise: widget.state.activeExercise,
         workoutType: _type,
         weight: weight,
         reps: reps,
         sets: sets,
         completed: _completed,
       ));
+      if (!mounted) return;
 
       final history = await widget.state.service.fetchWorkouts();
       if (!mounted) return;
@@ -124,12 +139,67 @@ class _TrainingTabState extends State<TrainingTab> {
         _saving = false;
       });
 
+      // Check achievements. An achievement fires a toast only when it flips
+      // locked -> unlocked as a result of THIS insert (the old/new diff) AND the
+      // permanent ledger has never recorded it. That second gate is what stops a
+      // deleted-then-re-added workout from re-toasting: claimAchievement returns
+      // false for anything already banked. dispatch() walks up from `context`,
+      // so it must run against a mounted element.
+      final newAchievements = AchievementsEngine.evaluate(history, widget.state);
+      for (final newA in newAchievements) {
+        if (!newA.unlocked) continue;
+        final oldA = oldAchievements.firstWhere((a) => a.id == newA.id, orElse: () => newA);
+        if (oldA.unlocked) continue;
+        final firstTime = await widget.state.claimAchievement(newA.id);
+        if (!mounted) return;
+        if (firstTime) {
+          AchievementUnlockedNotification(s.achievementTitle(newA.id)).dispatch(context);
+        }
+      }
+
+      // Check 50% and 100% progress for Confetti. These thresholds are ledgered
+      // too — as `progress_<exercise>_50` / `_100` — so crossing 50% again after
+      // a delete-and-re-add stays silent.
+      final exercise = widget.state.activeExercise;
+      final oldBest = oldHistory.forExercise(exercise).bestEstimated1rm;
+      final newBest = history.forExercise(exercise).bestEstimated1rm;
+
+      final goalKg = switch (exercise) {
+        Exercise.benchPress => widget.state.profile.benchGoalKg,
+        Exercise.squat => widget.state.profile.squatGoalKg,
+        Exercise.deadlift => widget.state.profile.deadliftGoalKg,
+      };
+
+      final oldPercent = widget.state.profile.progressFor(oldBest, goalKg).percent;
+      final newPercent = widget.state.profile.progressFor(newBest, goalKg).percent;
+
+      // Push the fresh 1RM to the native home-screen widget. Fire-and-forget:
+      // it is internally guarded and must never delay or fail the log.
+      unawaited(WidgetService.updateHomeScreen(exercise, newBest ?? 0, goalKg));
+
+      var burst = false;
+      if (oldPercent < 50 && newPercent >= 50) {
+        if (await widget.state.claimAchievement('progress_${exercise.name}_50')) {
+          burst = true;
+        }
+        if (!mounted) return;
+      }
+      if (oldPercent < 100 && newPercent >= 100) {
+        if (await widget.state.claimAchievement('progress_${exercise.name}_100')) {
+          burst = true;
+        }
+        if (!mounted) return;
+      }
+      if (burst) widget.confetti.fire();
+
       await _celebrateIfMilestone(history);
-      if (mounted) _snack(s.sessionLogged);
+      if (!mounted) return;
+      _snack(messenger, s.sessionLogged);
     } catch (e) {
+      // The captured messenger means this works whether or not the tab survived.
+      _snack(messenger, s.couldNotSave('$e'));
       if (!mounted) return;
       setState(() => _saving = false);
-      _snack(s.couldNotSave('$e'));
     }
   }
 
@@ -142,12 +212,20 @@ class _TrainingTabState extends State<TrainingTab> {
   /// workout_data.json, or a session logged on your phone), claimMilestone
   /// returns false and nothing fires.
   Future<void> _celebrateIfMilestone(WorkoutHistory history) async {
-    final best = history.bestEstimated1rm;
+    final exercise = widget.state.activeExercise;
+    final exerciseHistory = history.forExercise(exercise);
+    final best = exerciseHistory.bestEstimated1rm;
     if (best == null) return;
+
+    final goalKg = switch (exercise) {
+      Exercise.benchPress => widget.state.profile.benchGoalKg,
+      Exercise.squat => widget.state.profile.squatGoalKg,
+      Exercise.deadlift => widget.state.profile.deadliftGoalKg,
+    };
 
     // Highest cleared milestone first, so one monster session that clears both
     // celebrates the goal rather than the 80 kg on the way to it.
-    for (final m in widget.state.profile.milestones.reversed) {
+    for (final m in milestonesFor(goalKg).reversed) {
       if (best < m.kg) continue;
       final claimed = await widget.state.claimMilestone(m.kg);
       if (!claimed) continue;
@@ -188,8 +266,11 @@ class _TrainingTabState extends State<TrainingTab> {
     );
   }
 
-  void _snack(String msg) {
-    ScaffoldMessenger.of(context)
+  /// Takes an already-resolved messenger rather than looking one up from
+  /// `context`, so callers can capture it before an await and still show a
+  /// snackbar safely on the far side of the async gap.
+  void _snack(ScaffoldMessengerState messenger, String msg) {
+    messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(msg)));
   }
@@ -205,45 +286,78 @@ class _TrainingTabState extends State<TrainingTab> {
 
     // The goal comes from the profile, so editing it in Settings rebuilds this
     // card — bar, remaining kilos and percentage together — with no refetch.
-    final progress =
-        context.app.profile.benchProgress(_history.bestEstimated1rm);
+    final exercise = widget.state.activeExercise;
+    final exerciseHistory = _history.forExercise(exercise);
 
-    return AdaptiveColumns(
-      onRefresh: _load,
-      primary: [
-        ui.QuoteCard(pick: _quote),
-        if (_history.plateauDetected)
-          _PlateauBanner(
-            streak: _history.failedHeavyStreak,
-            from: _history.currentWorkingWeight ?? 0,
-            to: _history.recommendedWorkingWeight ?? 0,
-            onApply: () {
-              final rec = _history.recommendedWorkingWeight;
-              if (rec != null) _weightCtrl.text = ui.fmtKg(rec);
-            },
+    final goalKg = switch (exercise) {
+      Exercise.benchPress => context.app.profile.benchGoalKg,
+      Exercise.squat => context.app.profile.squatGoalKg,
+      Exercise.deadlift => context.app.profile.deadliftGoalKg,
+    };
+    final progress =
+        context.app.profile.progressFor(exerciseHistory.bestEstimated1rm, goalKg);
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<Exercise>(
+              segments: const [
+                ButtonSegment(value: Exercise.benchPress, label: Text('Bench')),
+                ButtonSegment(value: Exercise.squat, label: Text('Squat')),
+                ButtonSegment(value: Exercise.deadlift, label: Text('Deadlift')),
+              ],
+              selected: {exercise},
+              onSelectionChanged: (set) => widget.state.setActiveExercise(set.first),
+              showSelectedIcon: false,
+              style: SegmentedButton.styleFrom(
+                textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            ),
           ),
-        _StatsRow(history: _history, progress: progress),
-        _LogCard(
-          weightCtrl: _weightCtrl,
-          repsCtrl: _repsCtrl,
-          setsCtrl: _setsCtrl,
-          type: _type,
-          completed: _completed,
-          saving: _saving,
-          onType: (t) => setState(() => _type = t),
-          onCompleted: (v) => setState(() => _completed = v),
-          onSubmit: _saving ? null : _log,
         ),
-      ],
-      secondary: [
-        _WarmupCard(working: _working),
-        _HistoryCard(
-          history: _history,
-          onDelete: (w) async {
-            if (w.id == null) return;
-            await widget.state.service.deleteWorkout(w.id!);
-            await _load();
-          },
+        Expanded(
+          child: AdaptiveColumns(
+            onRefresh: _load,
+            primary: [
+              ui.QuoteCard(pick: _quote),
+              if (exerciseHistory.plateauDetected)
+                _PlateauBanner(
+                  streak: exerciseHistory.failedHeavyStreak,
+                  from: exerciseHistory.currentWorkingWeight ?? 0,
+                  to: exerciseHistory.recommendedWorkingWeight ?? 0,
+                  onApply: () {
+                    final rec = exerciseHistory.recommendedWorkingWeight;
+                    if (rec != null) _weightCtrl.text = ui.fmtKg(rec);
+                  },
+                ),
+              _StatsRow(history: exerciseHistory, progress: progress),
+              _LogCard(
+                weightCtrl: _weightCtrl,
+                repsCtrl: _repsCtrl,
+                setsCtrl: _setsCtrl,
+                type: _type,
+                completed: _completed,
+                saving: _saving,
+                onType: (t) => setState(() => _type = t),
+                onCompleted: (v) => setState(() => _completed = v),
+                onSubmit: _saving ? null : _log,
+              ),
+            ],
+            secondary: [
+              _WarmupCard(working: _working),
+              _HistoryCard(
+                history: exerciseHistory,
+                onDelete: (w) async {
+                  if (w.id == null) return;
+                  await widget.state.service.deleteWorkout(w.id!);
+                  await _load();
+                },
+              ),
+            ],
+          ),
         ),
       ],
     );

@@ -450,4 +450,106 @@ class RuStrings implements AppStrings {
 
   @override
   String get geminiReplyLanguage => 'Reply in Russian (по-русски).';
+
+  // -- hydration -------------------------------------------------------------
+  @override
+  String get hydrationTitle => 'Вода';
+  @override
+  String hydrationLogged(int current, int target) => '$current / $target мл';
+
+  // -- reminders -------------------------------------------------------------
+  @override
+  String get remindersTitle => 'Напоминания';
+  @override
+  String get reminderTakeCreatine => 'Принять креатин';
+  @override
+  String get reminderEatMeal => 'Прием пищи';
+  @override
+  String get reminderHydrate => 'Выпить воды';
+  @override
+  String get reminderWorkoutTime => 'Время тренировки';
+  @override
+  String get reminderNoTime => 'Время не задано';
+  @override
+  String get reminderTapToSchedule => 'Нажмите, чтобы задать время';
+  @override
+  String get reminderAddTime => 'Добавить время';
+
+  // -- history / progress ----------------------------------------------------
+  @override
+  String get historyTitle => 'Прогресс';
+  @override
+  String get historyChartTitle => 'Расчётный 1ПМ во времени';
+  @override
+  String get historyPersonalRecords => 'Личные рекорды';
+  @override
+  String get historyNoData => 'Запишите тренировку, чтобы увидеть прогресс.';
+  @override
+  String historySinceStart(String kg) => '+$kg кг с начала';
+
+  // -- achievements ----------------------------------------------------------
+  @override
+  String get achievementsTitle => 'Достижения';
+  @override
+  String get achievementsBenchPress => 'Жим лёжа';
+  @override
+  String get achievementsSquats => 'Приседания';
+  @override
+  String get achievementsDeadlift => 'Становая тяга';
+  @override
+  String get achievementsEasterEggs => 'Фановые и пасхалки';
+  @override
+  String get achievementNotUnlocked => 'Это достижение еще не разблокировано';
+  @override
+  String achievementUnlockedToast(String title) => 'Достижение разблокировано: $title';
+  @override
+  String achievementUnlockedAt(String date) => 'Разблокировано: $date';
+
+  @override
+  String achievementTitle(String id) => switch (id) {
+        'bench_50' => 'Гриф и две печенюшки',
+        'bench_80' => 'Уже не стыдно',
+        'bench_100' => 'Ты что, самый крутой?',
+        'bench_120' => 'Гроза подснежников',
+        'bench_150' => 'Человек-домкрат',
+        'squat_60' => 'День ног? Не слышал',
+        'squat_100' => 'Колени вышли из чата',
+        'squat_140' => 'Джинсы треснули',
+        'squat_180' => 'Квадры-базуки',
+        'squat_200' => 'Гравитация — миф',
+        'deadlift_100' => 'Спина пока на месте',
+        'deadlift_150' => 'Спонсор остеопата',
+        'deadlift_200' => 'Трактор на минималках',
+        'deadlift_250' => 'Грузчик 80-го уровня',
+        'deadlift_300' => 'Поднял диван с батей',
+        'fun_bar_won' => 'Штанга победила',
+        'fun_step_back' => 'Шаг назад, два вперед',
+        'fun_early_bird' => 'Псих-жаворонок',
+        'fun_night_owl' => 'Качалка закрыта, иди спи!',
+        _ => 'Неизвестное достижение',
+      };
+
+  @override
+  String achievementDesc(String id) => switch (id) {
+        'bench_50' => 'Пожал 50 кг! Начало положено, печеньки заслужены.',
+        'bench_80' => 'Пожал 80 кг! В зале на тебя больше не смотрят сочувственно.',
+        'bench_100' => 'Пожал сотку! Официально солидный человек.',
+        'bench_120' => 'Пожал 120 кг! Весной все тренажеры твои по праву.',
+        'bench_150' => 'Пожал 150 кг! Физика вышла из чата, ты просто машина.',
+        'squat_60' => 'Присел 60 кг! Ноги хотя бы присутствуют.',
+        'squat_100' => 'Присел 100 кг! Слышишь этот хруст? Это уважение.',
+        'squat_140' => 'Присел 140 кг! Придется обновить гардероб, квадры не влезают.',
+        'squat_180' => 'Присел 180 кг! Твои ноги способны сдвинуть тектоническую плиту.',
+        'squat_200' => 'Присел 200 кг! Земля пытается притянуть тебя, но ты сильнее.',
+        'deadlift_100' => 'Потянул 100 кг! Протрузии передают привет.',
+        'deadlift_150' => 'Потянул 150 кг! Твой мануальщик уже покупает новую машину.',
+        'deadlift_200' => 'Потянул 200 кг! Способен буксировать легковушки без троса.',
+        'deadlift_250' => 'Потянул 250 кг! Можешь разгрузить фуру взглядом.',
+        'deadlift_300' => 'Потянул 300 кг! Легендарный уровень силы, батя гордится.',
+        'fun_bar_won' => 'Не твой день. Штанга сегодня оказалась сильнее, но ты вернешься.',
+        'fun_step_back' => 'Умный атлет умеет вовремя сделать откат, чтобы выстрелить сильнее.',
+        'fun_early_bird' => 'Тренировка на рассвете? Ты либо гений, либо безумец.',
+        'fun_night_owl' => 'Ночной дожор или ночной жим? Марш в кровать, мышцы растут во сне!',
+        _ => '',
+      };
 }

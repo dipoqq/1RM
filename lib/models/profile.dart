@@ -144,6 +144,8 @@ class Profile {
     this.goal = Goal.leanBulk,
     this.activity = ActivityLevel.moderatelyActive,
     this.benchGoalKg = kDefaultGoalKg,
+    this.squatGoalKg = 100,
+    this.deadliftGoalKg = 120,
     this.locale = AppLocale.en,
     this.themeMode = AppThemeMode.dark,
     this.celebratedMilestones = const [],
@@ -164,6 +166,8 @@ class Profile {
   /// percentage figure in the Training tab is measured against this, and it is
   /// the final confetti milestone.
   final double benchGoalKg;
+  final double squatGoalKg;
+  final double deadliftGoalKg;
 
   /// The language the UI renders in. Persisted so the choice follows the user
   /// from the desktop app to the phone rather than being made twice.
@@ -207,19 +211,21 @@ class Profile {
       celebratedMilestones.any((m) => (m - kg).abs() < 0.001);
 
   /// Bench press progress of [best1rm] toward [benchGoalKg].
-  BenchProgress benchProgress(double? best1rm) {
+  BenchProgress benchProgress(double? best1rm) => progressFor(best1rm, benchGoalKg);
+
+  BenchProgress progressFor(double? best1rm, double goalKg) {
     final best = best1rm ?? 0;
-    // benchGoalKg is floored at the bar by [clampGoal] on the way in, so this
+    // goalKg is floored at the bar by [clampGoal] on the way in, so this
     // cannot divide by zero — the guard is belt-and-braces against a row
     // written by some future migration.
-    final ratio = benchGoalKg <= 0 ? 0.0 : best / benchGoalKg;
+    final ratio = goalKg <= 0 ? 0.0 : best / goalKg;
     return (
       best: best1rm,
-      goalKg: benchGoalKg,
+      goalKg: goalKg,
       ratio: ratio.clamp(0.0, 1.0),
-      remainingKg: (benchGoalKg - best).clamp(0.0, double.infinity),
+      remainingKg: (goalKg - best).clamp(0.0, double.infinity),
       percent: (ratio * 100).round(),
-      cleared: best >= benchGoalKg,
+      cleared: best >= goalKg,
     );
   }
 
@@ -238,6 +244,8 @@ class Profile {
     Goal? goal,
     ActivityLevel? activity,
     double? benchGoalKg,
+    double? squatGoalKg,
+    double? deadliftGoalKg,
     AppLocale? locale,
     AppThemeMode? themeMode,
     List<double>? celebratedMilestones,
@@ -252,6 +260,10 @@ class Profile {
         activity: activity ?? this.activity,
         benchGoalKg:
             benchGoalKg == null ? this.benchGoalKg : clampGoal(benchGoalKg),
+        squatGoalKg:
+            squatGoalKg == null ? this.squatGoalKg : clampGoal(squatGoalKg),
+        deadliftGoalKg:
+            deadliftGoalKg == null ? this.deadliftGoalKg : clampGoal(deadliftGoalKg),
         locale: locale ?? this.locale,
         themeMode: themeMode ?? this.themeMode,
         celebratedMilestones:
@@ -273,6 +285,10 @@ class Profile {
         activity: ActivityLevel.fromLabel(json['activity_level'] as String?),
         benchGoalKg: clampGoal(
             (json['bench_goal_kg'] as num?)?.toDouble() ?? kDefaultGoalKg),
+        squatGoalKg: clampGoal(
+            (json['squat_goal_kg'] as num?)?.toDouble() ?? 100),
+        deadliftGoalKg: clampGoal(
+            (json['deadlift_goal_kg'] as num?)?.toDouble() ?? 120),
         locale: AppLocale.fromCode(json['language'] as String?),
         themeMode: AppThemeMode.fromCode(json['theme'] as String?),
         celebratedMilestones: ((json['celebrated_milestones'] as List?) ?? [])
@@ -293,6 +309,8 @@ class Profile {
         'goal': goal.label,
         'activity_level': activity.label,
         'bench_goal_kg': benchGoalKg,
+        'squat_goal_kg': squatGoalKg,
+        'deadlift_goal_kg': deadliftGoalKg,
         'language': locale.code,
         'theme': themeMode.code,
         'celebrated_milestones': celebratedMilestones,

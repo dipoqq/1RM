@@ -52,4 +52,13 @@ abstract interface class Backend {
   /// Atomically claim a milestone celebration. True only if THIS call claimed
   /// it — the caller may then fire the confetti.
   Future<bool> claimMilestone(double kg);
+
+  /// The permanent ledger of achievement ids this user has ever unlocked.
+  /// Loaded once at sign-in and used to suppress duplicate toasts/confetti when
+  /// a workout is deleted and re-added.
+  Future<Set<String>> fetchUnlockedAchievements();
+
+  /// Record an achievement id in the ledger, idempotently. True only if THIS
+  /// call was the first to record it — the caller may then celebrate.
+  Future<bool> recordAchievement(String id);
 }

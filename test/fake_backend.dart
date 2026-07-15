@@ -71,6 +71,18 @@ class FakeBackend implements Backend {
     return true;
   }
 
+  /// In-memory mirror of the unlocked_achievements ledger, with the same
+  /// idempotent "true only the first time" contract as the real backend.
+  final Set<String> unlockedAchievements = {};
+
+  @override
+  Future<Set<String>> fetchUnlockedAchievements() async =>
+      {...unlockedAchievements};
+
+  @override
+  Future<bool> recordAchievement(String id) async =>
+      unlockedAchievements.add(id); // Set.add returns false if already present
+
   // The rest of the surface is not what these tests are about.
   @override
   Future<void> signIn(String email, String password) async => signedIn = true;
