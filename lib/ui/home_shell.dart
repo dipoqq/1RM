@@ -104,8 +104,23 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
     return Scaffold(
       appBar: AppBar(
         leadingWidth: 120,
-        leading: const Center(
-          child: Text('AppLogo', style: TextStyle(fontWeight: FontWeight.bold)),
+        // Wordmark switches with the active theme: the dark-theme variant has a
+        // mint mark that reads on near-black chrome, the light-theme variant a
+        // charcoal mark for white chrome. Brightness comes from the palette, so
+        // it crossfades with the rest of the tree on a theme switch.
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 16),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Image.asset(
+              c.brightness == Brightness.dark
+                  ? 'images/AppBarLogoDark.png'
+                  : 'images/AppBarLogoLight.png',
+              height: 30,
+              fit: BoxFit.contain,
+              excludeFromSemantics: true, // decorative; title lives in the tab bar
+            ),
+          ),
         ),
         title: const SizedBox.shrink(),
         actions: [
