@@ -9,6 +9,8 @@ import '../../models/workout.dart';
 import '../../state/app_state.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart' as ui;
+import '../widgets/rank_badge.dart';
+import '../widgets/workout_calendar.dart';
 
 /// A single personal-record step: the session that first pushed the estimated
 /// 1RM higher than everything before it.
@@ -111,8 +113,13 @@ class _HistoryTabState extends State<HistoryTab> {
 
     return Column(
       children: [
+        // Training calendar: completed days glow mint; tap one for its sessions.
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          padding: const EdgeInsets.only(top: 12),
+          child: WorkoutCalendar(history: _history, state: widget.state),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
           child: SizedBox(
             width: double.infinity,
             child: SegmentedButton<Exercise>(
@@ -131,6 +138,12 @@ class _HistoryTabState extends State<HistoryTab> {
               ),
             ),
           ),
+        ),
+        // The overall strength rank, shown whether or not the selected lift has
+        // any sessions yet — it reflects all three lifts against live weight.
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: RankBadge(history: _history, profile: context.app.profile),
         ),
         Expanded(
           child: sessions.isEmpty

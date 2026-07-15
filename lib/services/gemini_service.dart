@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:google_generative_ai/google_generative_ai.dart';
@@ -6,12 +7,11 @@ import '../core/constants.dart';
 import '../core/l10n/app_strings.dart';
 import '../models/meal.dart';
 import '../models/profile.dart';
-
-const _dataOpen = '[DATA]';
-const _dataClose = '[/DATA]';
+import '../models/workout.dart';
+import 'timeout_http_client.dart';
 
 /// Gemini's reply: the prose to show, plus the meal it parsed (null if the
-/// model failed to emit a well-formed [DATA] block).
+/// model failed to emit well-formed macros).
 typedef Analysis = ({String prose, Meal? meal});
 
 /// Wraps the multimodal Gemini call. No Flutter imports — pure IO.
@@ -28,36 +28,42 @@ class GeminiService {
 
   static bool get isConfigured => _apiKey.isNotEmpty;
 
+  /// One shared HTTP client with a 30-second receive deadline, so a stalled
+  /// mobile connection times out cleanly instead of hanging the Analyze button
+  /// forever. Static so [GeminiService] stays `const` and every call reuses the
+  /// same connection pool.
+  static final _httpClient =
+      TimeoutHttpClient(timeout: const Duration(seconds: 30));
+
   /// Model chain, tried in order.
   ///
-  /// gemini-3-flash-preview leads: gemini-2.5-flash 404s for newly-created API
-  /// keys ("no longer available to new users"), which is exactly what happened
-  /// here after the key rotation — and the same trap bench_tracker.py documents
-  /// at its GEMINI_MODEL constant. It stays at the back of the chain rather than
-  /// being deleted, so an older key that still has access can use it.
-  ///
-  /// A 404 or 503 means "try the next model"; anything else (bad key, no
-  /// network, quota) is a real failure and is rethrown immediately rather than
-  /// silently retried.
+  /// `gemini-3.5-flash` failed with regional 503/404 and SDK mismatches, so the
+  /// app moved to the stable, JSON-Mode-friendly `gemini-3.1-flash-lite`, with
+  /// `gemini-2.5-flash` behind it. A 404/503 means "try the next"; anything else
+  /// (bad key, no network, quota) is a real failure and is rethrown immediately.
   static const _models = <String>[
-    'gemini-3-flash-preview',
-    'gemini-flash-latest',
+    'gemini-3.1-flash-lite',
     'gemini-2.5-flash',
-    'gemini-2.0-flash',
   ];
 
-  GenerativeModel _model(
-    String name,
-    Profile profile,
-    MacroTotals eaten,
-    AppStrings strings,
-  ) =>
-      GenerativeModel(
-        model: name,
-        apiKey: _apiKey,
-        systemInstruction:
-            Content.system(systemPrompt(profile, eaten, strings)),
-      );
+  /// Strict JSON mode: the model must return a single object matching this
+  /// schema and nothing else — no prose wrapper, no markdown fence — so the
+  /// reply parses deterministically instead of depending on a hand-written
+  /// `[DATA]` block the model could format three different ways.
+  static final _schema = Schema.object(
+    properties: {
+      'name': Schema.string(description: 'Short name of the meal.'),
+      'advice': Schema.string(
+        description: 'Concise, practical assessment of how the meal fits the '
+            "user's remaining targets, in the requested language.",
+      ),
+      'calories': Schema.number(description: 'Total calories (kcal).'),
+      'proteins': Schema.number(description: 'Total protein (grams).'),
+      'carbs': Schema.number(description: 'Total carbohydrates (grams).'),
+      'fats': Schema.number(description: 'Total fats (grams).'),
+    },
+    requiredProperties: ['name', 'calories', 'proteins', 'carbs', 'fats'],
+  );
 
   static bool _retryable(Object e) {
     final s = e.toString().toLowerCase();
@@ -67,6 +73,32 @@ class GeminiService {
         s.contains('not found') ||
         s.contains('unavailable') ||
         s.contains('overloaded');
+  }
+
+  /// Generate against the model chain, falling through on a 404/503 to the next
+  /// model and rethrowing anything else. Shared by [analyze] (JSON mode) and
+  /// [coach] (plain text), which differ only in their generation config.
+  Future<GenerateContentResponse> _run({
+    required Content systemInstruction,
+    required List<Content> content,
+    GenerationConfig? generationConfig,
+  }) async {
+    Object? lastError;
+    for (final name in _models) {
+      try {
+        return await GenerativeModel(
+          model: name,
+          apiKey: _apiKey,
+          httpClient: _httpClient,
+          generationConfig: generationConfig,
+          systemInstruction: systemInstruction,
+        ).generateContent(content);
+      } catch (e) {
+        if (!_retryable(e)) rethrow;
+        lastError = e; // model retired or overloaded — fall through to the next
+      }
+    }
+    throw StateError('No Gemini model available. Last error: $lastError');
   }
 
   /// One body metric, rendered for the prompt.
@@ -86,8 +118,13 @@ class GeminiService {
   /// for every user of the app, which is how a single developer's height and
   /// weight ended up sizing other people's meals.
   ///
+  /// The payload is kept deliberately lean — the profile, today's targets and
+  /// what is left, and nothing else. The full meal history is *not* sent: it
+  /// would bloat the prompt (and the token bill) on every call without changing
+  /// the estimate, which depends only on the meal in front of the model.
+  ///
   /// Exposed (and not private) so the metrics it injects can be unit-tested
-  /// without a network call, exactly as [parseReply] is.
+  /// without a network call, exactly as [parse] is.
   static String systemPrompt(
     Profile profile,
     MacroTotals eaten,
@@ -122,22 +159,20 @@ protein, ${eaten.carbs.round()} g carbs and ${eaten.fats.round()} g fats —
 leaving $kcalLeft kcal, $proteinLeft g protein, $carbsLeft g carbs and
 $fatsLeft g fats.
 
-Assess the meal they describe or photograph. Be concise and practical: estimate
-all four macros, say how the meal fits what they have left today, and give one
-specific adjustment if it does not fit.
+Assess the meal they describe or photograph. Estimate all four macros and put a
+concise, practical "advice" note — how the meal fits what they have left today,
+and one specific adjustment if it does not.
 
-${strings.geminiReplyLanguage}
+Return your answer as a single JSON object with exactly these keys:
+  "name"     — a short name for the meal (in the user's language),
+  "advice"   — your assessment prose (in the user's language),
+  "calories" — total kcal, a plain number,
+  "proteins" — total protein in grams, a plain number,
+  "carbs"    — total carbs in grams, a plain number,
+  "fats"     — total fats in grams, a plain number.
+Use plain numbers with no units. Do not wrap the JSON in markdown or any prose.
 
-Then, as the VERY LAST line of your reply and nothing after it, append this
-exact block with your numeric estimates:
-
-$_dataOpen Name: Meal Name | Calories: X | Protein: Y | Carbs: Z | Fats: W $_dataClose
-
-Use plain integers with no units inside the block. The block itself — the
-$_dataOpen and $_dataClose markers and the field names Name, Calories, Protein,
-Carbs and Fats — stays in English exactly as written above, whatever language
-the prose is in; it is parsed by the app, not read by the user. Only the meal
-name inside it is written in their language.''';
+${strings.geminiReplyLanguage}''';
   }
 
   /// Analyse a meal from text and/or a photo.
@@ -168,35 +203,172 @@ name inside it is written in their language.''';
       if (image != null) DataPart(imageMime, image),
     ];
 
-    final content = [Content.multi(parts)];
+    final response = await _run(
+      systemInstruction: Content.system(systemPrompt(profile, eaten, strings)),
+      content: [Content.multi(parts)],
+      generationConfig: GenerationConfig(
+        responseMimeType: 'application/json',
+        responseSchema: _schema,
+      ),
+    );
 
-    Object? lastError;
-    for (final name in _models) {
-      final GenerateContentResponse response;
-      try {
-        response = await _model(name, profile, eaten, strings)
-            .generateContent(content);
-      } catch (e) {
-        if (!_retryable(e)) rethrow;
-        lastError = e; // model retired or overloaded — fall through to the next
-        continue;
-      }
-
-      final reply = response.text;
-      if (reply == null || reply.isEmpty) {
-        throw StateError('Gemini returned an empty response.');
-      }
-      return parseReply(reply, day);
+    final reply = response.text;
+    if (reply == null || reply.isEmpty) {
+      throw StateError('Gemini returned an empty response.');
     }
-
-    throw StateError('No Gemini model available. Last error: $lastError');
+    return parse(reply, day);
   }
 
-  /// Split the reply into (prose, Meal) on the [DATA] block.
+  /// Ask the model for a progression plan from the lifter's recent training.
   ///
-  /// Returns a null Meal if the block is missing or malformed, which pushes the
-  /// UI to the manual Quick Add fallback rather than silently logging garbage.
+  /// Plain text, not JSON: the reply is a motivating coaching block shown as-is.
+  /// The prompt is built by [coachPrompt] and is deliberately compact — a capped
+  /// window of recent sessions per lift, not the whole history.
+  Future<String> coach({
+    required WorkoutHistory history,
+    required Profile profile,
+    required AppStrings strings,
+  }) async {
+    final response = await _run(
+      systemInstruction: Content.system(coachPrompt(history, profile, strings)),
+      content: [
+        Content.text(
+          'Analyse my recent training above and give me my progression plan.',
+        ),
+      ],
+    );
+    final reply = response.text;
+    if (reply == null || reply.trim().isEmpty) {
+      throw StateError('Gemini returned an empty response.');
+    }
+    return reply.trim();
+  }
+
+  /// The coaching system prompt: the lifter's bodyweight, and for each lift the
+  /// goal, best estimated 1RM, an explicit plateau flag, and a short window of
+  /// recent sessions. Exposed (not private) so it can be unit-tested without a
+  /// network call — the same pattern as [systemPrompt].
+  ///
+  /// Only the most recent [_coachWindow] sessions per lift are included: the
+  /// coach needs the current trend, not a data dump, and a lean prompt keeps the
+  /// call fast and cheap on a phone.
+  static const _coachWindow = 6;
+
+  static String coachPrompt(
+    WorkoutHistory history,
+    Profile profile,
+    AppStrings strings,
+  ) {
+    double goalOf(Exercise e) => switch (e) {
+          Exercise.benchPress => profile.benchGoalKg,
+          Exercise.squat => profile.squatGoalKg,
+          Exercise.deadlift => profile.deadliftGoalKg,
+        };
+
+    final buf = StringBuffer()
+      ..writeln('You are an elite, old-school strength and powerlifting coach.')
+      ..writeln(
+          'Lifter bodyweight: ${_metric(profile.weightKg, 'kg')}.')
+      ..writeln();
+
+    for (final ex in Exercise.values) {
+      final h = history.forExercise(ex);
+      final recent = h.all.take(_coachWindow).toList(); // newest first
+      if (recent.isEmpty) continue;
+
+      final best = h.bestEstimated1rm;
+      buf
+        ..writeln('${ex.label} — goal ${goalOf(ex).round()} kg, '
+            'best est. 1RM ${best == null ? 'n/a' : '${best.toStringAsFixed(1)} kg'}'
+            '${h.plateauDetected ? '  [PLATEAU: recent heavy days failed]' : ''}')
+        ..writeln('  recent sessions (oldest→newest):');
+      for (final w in recent.reversed) {
+        buf.writeln('    ${Meal.dateKey(w.date)}: '
+            '${w.weight}kg × ${w.reps} × ${w.sets} '
+            '${w.completed ? 'completed' : 'FAILED'} '
+            '(~${w.estimated1rm.toStringAsFixed(1)} kg 1RM)');
+      }
+      buf.writeln();
+    }
+
+    buf
+      ..writeln(strings.geminiReplyLanguage)
+      ..writeln('Give a concise, highly personalised progression plan: name any '
+          'plateau you see, prescribe concrete next weights/sets/reps per lift, '
+          'and finish with one punchy line of old-school gym motivation. Plain '
+          'text, no markdown headers.');
+
+    return buf.toString();
+  }
+
+  /// Turn a model reply into (prose, Meal).
+  ///
+  /// Strict JSON mode means [reply] is normally the JSON object described by
+  /// [_schema]; [_fromJson] reads it. As a safety net for a fallback model that
+  /// ignored the mime type (or a rare markdown-fenced reply), it degrades to the
+  /// legacy `[DATA]`-block parser rather than dropping the meal.
+  ///
   /// Exposed (and not private) so it can be unit-tested without a network call.
+  static Analysis parse(String reply, DateTime day) {
+    final json = _tryDecode(reply);
+    if (json != null) return _fromJson(json, day);
+    return parseReply(reply, day);
+  }
+
+  /// Decode [reply] as a JSON object, tolerating a stray markdown ```json fence
+  /// or leading/trailing prose. Returns null when there is no object to read.
+  static Map<String, dynamic>? _tryDecode(String reply) {
+    final start = reply.indexOf('{');
+    final end = reply.lastIndexOf('}');
+    if (start == -1 || end <= start) return null;
+    try {
+      final decoded = jsonDecode(reply.substring(start, end + 1));
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Analysis _fromJson(Map<String, dynamic> json, DateTime day) {
+    final prose = (json['advice'] as String?)?.trim() ?? '';
+    final name = (json['name'] as String?)?.trim() ?? '';
+
+    double? num_(Object? v) => switch (v) {
+          num n when n.isFinite => n.toDouble(),
+          String s => double.tryParse(s.replaceAll(RegExp(r'[^0-9.\-]'), '')),
+          _ => null,
+        };
+
+    final calories = num_(json['calories']);
+    // Accept the schema's "proteins" and a plain "protein" alike.
+    final protein = num_(json['proteins'] ?? json['protein']);
+    if (name.isEmpty || calories == null || protein == null) {
+      return (prose: prose, meal: null);
+    }
+
+    return (
+      prose: prose,
+      meal: Meal(
+        day: Meal.dayOf(day),
+        name: name,
+        calories: calories,
+        protein: protein,
+        carbs: num_(json['carbs']) ?? 0,
+        fats: num_(json['fats']) ?? 0,
+      ),
+    );
+  }
+
+  // -- legacy [DATA]-block fallback ------------------------------------------
+
+  static const _dataOpen = '[DATA]';
+  static const _dataClose = '[/DATA]';
+
+  /// Split a legacy reply into (prose, Meal) on the `[DATA]` block.
+  ///
+  /// Only reached when strict JSON mode did not produce a JSON object. Returns a
+  /// null Meal if the block is missing or malformed, which pushes the UI to the
+  /// manual Quick Add fallback rather than silently logging garbage.
   static Analysis parseReply(String reply, DateTime day) {
     final start = reply.indexOf(_dataOpen);
     final end = start == -1 ? -1 : reply.indexOf(_dataClose, start + 1);

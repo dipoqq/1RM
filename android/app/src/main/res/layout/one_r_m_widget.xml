@@ -4,29 +4,54 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_background"
-    android:padding="14dp">
+    android:padding="16dp">
 
-    <TextView
-        android:id="@+id/widget_title"
-        android:layout_width="wrap_content"
+    <!-- Header: lift name on the left, completion badge on the right. -->
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="1RM - Bench Press"
-        android:textColor="#8EE3C8"
-        android:textSize="12sp"
-        android:textStyle="bold"
-        android:letterSpacing="0.03"
-        android:maxLines="1"
-        android:ellipsize="end" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="1RM · Bench Press"
+            android:textColor="#8EE3C8"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.02"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/widget_percent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0%"
+            android:textColor="#0B0F0D"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:paddingLeft="8dp"
+            android:paddingRight="8dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:background="@drawable/widget_badge" />
+    </LinearLayout>
+
+    <!-- The number, high-contrast and dominant. -->
     <TextView
         android:id="@+id/widget_value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="8dp"
         android:text="0 kg / 0 kg"
-        android:textColor="#F4F6F5"
-        android:textSize="22sp"
+        android:textColor="#FFFFFF"
+        android:textSize="26sp"
         android:textStyle="bold"
+        android:letterSpacing="-0.01"
         android:maxLines="1"
         android:ellipsize="end" />
 
@@ -34,8 +59,8 @@
         android:id="@+id/widget_progress"
         style="@android:style/Widget.ProgressBar.Horizontal"
         android:layout_width="match_parent"
-        android:layout_height="8dp"
-        android:layout_marginTop="10dp"
+        android:layout_height="10dp"
+        android:layout_marginTop="14dp"
         android:max="100"
         android:progress="0"
         android:progressDrawable="@drawable/widget_progress" />

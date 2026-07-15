@@ -39,8 +39,11 @@ void main() {
   /// The bench goal field is below the fold for the same reason. A lazy
   /// ListView does not even build off-screen children, so scroll it into
   /// existence before typing — otherwise its editable state does not exist yet.
+  ///
+  /// The screen now carries three goal fields (bench, squat, deadlift), so the
+  /// bench field is addressed by its key rather than by TextField type.
   Future<Finder> revealGoalField(WidgetTester tester) async {
-    final field = find.byType(TextField);
+    final field = find.byKey(const Key('benchGoalField'));
     // The screen's own ListView is the outermost Scrollable; the SegmentedButtons
     // above bring their own, so pin the scroll to the first one.
     await tester.scrollUntilVisible(field, 120,
@@ -99,6 +102,41 @@ void main() {
     expect(state.profile.benchGoalKg, 95);
     // And a rejected goal is never dressed up as a success.
     expect(find.text('Settings saved successfully!'), findsNothing);
+  });
+
+  testWidgets('typing a squat goal saves it and syncs it', (tester) async {
+    await open(tester, profile: const Profile(squatGoalKg: 140));
+
+    final squat = find.byKey(const Key('squatGoalField'));
+    await tester.scrollUntilVisible(squat, 120,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pump();
+
+    await tester.enterText(squat, '160');
+    await tapSave(tester);
+    await tester.pumpAndSettle();
+
+    expect(state.profile.squatGoalKg, 160);
+    expect(backend.saves.single.squatGoalKg, 160);
+    // Bench and deadlift were untouched, so only one write reached the backend.
+    expect(backend.saves.single.benchGoalKg, state.profile.benchGoalKg);
+  });
+
+  testWidgets('a deadlift typo is rejected, not persisted', (tester) async {
+    await open(tester, profile: const Profile(deadliftGoalKg: 200));
+
+    final dl = find.byKey(const Key('deadliftGoalField'));
+    await tester.scrollUntilVisible(dl, 120,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pump();
+
+    await tester.enterText(dl, '2000'); // meant 200
+    await tapSave(tester);
+    await tester.pump();
+
+    expect(find.text('Enter a target between 20 and 500 kg.'), findsOneWidget);
+    expect(backend.saves, isEmpty);
+    expect(state.profile.deadliftGoalKg, 200);
   });
 
   testWidgets('picking a gender persists it and re-scores the targets',

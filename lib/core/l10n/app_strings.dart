@@ -1,5 +1,7 @@
 import '../../models/profile.dart';
+import '../password_policy.dart';
 import '../progression.dart';
+import '../ranks.dart';
 import '../theme_mode.dart';
 import 'app_locale.dart';
 import 'strings_en.dart';
@@ -50,6 +52,42 @@ abstract interface class AppStrings {
   String get createAccount;
   String get haveAccount;
 
+  // -- password reset & policy ----------------------------------------------
+
+  /// The "Забыл пароль" link on the sign-in screen.
+  String get forgotPassword;
+  String get resetPasswordTitle;
+  String get resetPasswordSubtitle;
+  String get sendResetLink;
+  String get backToSignIn;
+
+  /// Shown after a reset request. Deliberately does not confirm whether the
+  /// address has an account — that would leak which emails are registered.
+  String resetEmailSent(String email);
+
+  /// One line listing every password rule, shown under the field on sign-up.
+  String get passwordRequirements;
+
+  /// The message for the first rule a candidate password fails.
+  String passwordRuleError(PasswordRule rule);
+
+  // -- connectivity / offline sync ------------------------------------------
+
+  /// The small badge shown while the device is offline.
+  String get offlineMode;
+
+  /// The non-blocking banner explaining that logging still works offline.
+  String get offlineBanner;
+
+  /// "N workouts waiting to sync" — the pending draft count.
+  String pendingSync(int count);
+
+  /// Shown briefly while queued drafts are being flushed on reconnect.
+  String get syncing;
+
+  /// Snackbar when a workout is saved to the local queue instead of the server.
+  String get savedOffline;
+
   // -- onboarding ------------------------------------------------------------
 
   /// "Welcome to 1RM." — the header on first run.
@@ -83,6 +121,12 @@ abstract interface class AppStrings {
   String benchGoalOutOfRange(double min, double max);
   String benchGoalSaved(String kg);
 
+  /// The Squat & Deadlift target-1RM card and its two fields.
+  String get strengthGoalsSection;
+  String get strengthGoalsHint;
+  String get squatGoalLabel;
+  String get deadliftGoalLabel;
+
   /// Shown when Save succeeds, whatever was changed.
   String get settingsSaved;
   String get profileSection;
@@ -91,6 +135,13 @@ abstract interface class AppStrings {
   // -- training --------------------------------------------------------------
 
   String get estimated1rm;
+
+  /// The strength-rank ("Звание") badge: its heading, the localized rank name,
+  /// and the relative-strength caption ("×4.2 bodyweight").
+  String get rankTitle;
+  String rankLabel(StrengthRank rank);
+  String rankRatio(String multiple);
+
   String weeksCompleted(int weeks);
   String goalCleared(String goalKg);
   String remainingToGoal(String remainingKg, String goalKg);
@@ -117,6 +168,16 @@ abstract interface class AppStrings {
   String warmupPurpose(WarmupStage stage);
   String get recentSessions;
   String get noSessions;
+
+  // -- progression coach -----------------------------------------------------
+
+  /// The "Получить план прогрессии" button and its surrounding card.
+  String get getProgressionPlan;
+  String get coachTitle;
+  String get coachIntro;
+  String get coachThinking;
+  String get coachNeedsHistory;
+  String coachFailed(String error);
   String get backToWork;
   String milestoneTitle(String kg);
   String milestoneSubtitle(bool isFinal);

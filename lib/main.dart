@@ -1,13 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'core/l10n/app_locale.dart';
 import 'core/l10n/app_strings.dart';
 import 'core/theme.dart';
+import 'services/backend.dart';
+import 'services/connectivity_monitor.dart';
+import 'services/offline_sync_backend.dart';
 import 'services/supabase_service.dart';
+import 'services/workout_draft_store.dart';
 import 'state/app_state.dart';
+import 'state/sync_controller.dart';
 import 'ui/auth_gate.dart';
 
 Future<void> main() async {
@@ -18,20 +24,49 @@ Future<void> main() async {
   await initializeDateFormatting();
 
   String? bootError;
+  AppState? state;
+  SyncController? sync;
   try {
     await SupabaseService.init();
+    final remote = SupabaseService(Supabase.instance.client);
+
+    // Offline-first stack. Wrap the server in a queue-backed decorator so
+    // workouts logged with no signal are kept locally and synced on reconnect.
+    // If any of it fails to initialise (Hive can't open its box, no plugin on
+    // this platform), fall back to talking to the server directly — the app
+    // must still run, just without the draft queue.
+    Backend backend = remote;
+    try {
+      await Hive.initFlutter();
+      final drafts = await HiveWorkoutDraftStore.open();
+      final monitor = ConnectivityPlusMonitor();
+      final offline = OfflineSyncBackend(
+        remote: remote,
+        drafts: drafts,
+        connectivity: monitor,
+      );
+      await offline.init();
+      backend = offline;
+      sync = SyncController(monitor: monitor, backend: offline);
+    } catch (e) {
+      debugPrint('Offline sync unavailable, using direct backend: $e');
+    }
+
+    state = AppState(backend);
   } catch (e) {
     // Surface a readable screen instead of a white void when the --dart-define
     // values were not passed at build time.
     bootError = '$e';
   }
 
-  runApp(BenchApp(bootError: bootError));
+  runApp(BenchApp(state: state, sync: sync, bootError: bootError));
 }
 
 class BenchApp extends StatefulWidget {
-  const BenchApp({super.key, this.bootError});
+  const BenchApp({super.key, this.state, this.sync, this.bootError});
 
+  final AppState? state;
+  final SyncController? sync;
   final String? bootError;
 
   @override
@@ -39,27 +74,16 @@ class BenchApp extends StatefulWidget {
 }
 
 class _BenchAppState extends State<BenchApp> {
-  AppState? _state;
-
-  @override
-  void initState() {
-    super.initState();
-    // Supabase.instance.client throws if initialize() never ran, so the state —
-    // and everything that depends on a profile — only exists on a good boot.
-    if (widget.bootError == null) {
-      _state = AppState(SupabaseService(Supabase.instance.client));
-    }
-  }
-
   @override
   void dispose() {
-    _state?.dispose();
+    widget.state?.dispose();
+    widget.sync?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final state = _state;
+    final state = widget.state;
     if (state == null) {
       return _app(
         locale: AppLocale.fromSystem(),
@@ -73,15 +97,23 @@ class _BenchAppState extends State<BenchApp> {
     // AppScope sits ABOVE MaterialApp, so a language switch — or a theme
     // switch — rebuilds the app's own theme, locale and delegates too, not just
     // the screen that toggled it.
+    final sync = widget.sync;
     return AppScope(
       state: state,
       child: AnimatedBuilder(
         animation: state,
-        builder: (context, _) => _app(
-          locale: state.locale,
-          themeMode: state.themeMode,
-          home: AppScope(state: state, child: AuthGate(state: state)),
-        ),
+        builder: (context, _) {
+          Widget home = AppScope(state: state, child: AuthGate(state: state));
+          // The sync scope sits above the gate (and thus the whole app), so the
+          // offline badge and banner can read it from anywhere in the tree. It
+          // is optional: a boot without offline support has no controller.
+          if (sync != null) home = SyncScope(controller: sync, child: home);
+          return _app(
+            locale: state.locale,
+            themeMode: state.themeMode,
+            home: home,
+          );
+        },
       ),
     );
   }

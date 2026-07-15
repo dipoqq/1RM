@@ -1,5 +1,7 @@
 import '../../models/profile.dart';
+import '../password_policy.dart';
 import '../progression.dart';
+import '../ranks.dart';
 import '../theme_mode.dart';
 import 'app_locale.dart';
 import 'app_strings.dart';
@@ -53,6 +55,55 @@ class EnStrings implements AppStrings {
   String get createAccount => 'Create an account';
   @override
   String get haveAccount => 'I already have an account';
+
+  // -- password reset & policy ----------------------------------------------
+
+  @override
+  String get forgotPassword => 'Forgot password?';
+  @override
+  String get resetPasswordTitle => 'Reset your password';
+  @override
+  String get resetPasswordSubtitle =>
+      'Enter the email you signed up with and we will send you a link to set a '
+      'new password.';
+  @override
+  String get sendResetLink => 'Send reset link';
+  @override
+  String get backToSignIn => 'Back to sign in';
+  @override
+  String resetEmailSent(String email) =>
+      'If an account exists for $email, a password reset link is on its way. '
+      'Check your inbox.';
+  @override
+  String get passwordRequirements =>
+      'At least 8 characters, with upper- and lowercase letters, a digit and a '
+      'symbol.';
+  @override
+  String passwordRuleError(PasswordRule rule) => switch (rule) {
+        PasswordRule.minLength => 'Password must be at least 8 characters.',
+        PasswordRule.lowercase =>
+          'Password must include a lowercase letter.',
+        PasswordRule.uppercase =>
+          'Password must include an uppercase letter.',
+        PasswordRule.digit => 'Password must include a digit.',
+        PasswordRule.symbol => 'Password must include a symbol.',
+      };
+
+  // -- connectivity / offline sync ------------------------------------------
+
+  @override
+  String get offlineMode => 'Offline Mode';
+  @override
+  String get offlineBanner =>
+      "You're offline. Keep logging — your workouts save on this device and "
+      'sync automatically when you reconnect.';
+  @override
+  String pendingSync(int count) =>
+      '$count ${count == 1 ? 'workout' : 'workouts'} waiting to sync';
+  @override
+  String get syncing => 'Syncing…';
+  @override
+  String get savedOffline => 'Saved offline — will sync when you reconnect.';
 
   // -- onboarding ------------------------------------------------------------
 
@@ -117,6 +168,16 @@ class EnStrings implements AppStrings {
   @override
   String benchGoalSaved(String kg) => 'Bench press goal set to $kg kg.';
   @override
+  String get strengthGoalsSection => 'Squat & deadlift goals';
+  @override
+  String get strengthGoalsHint =>
+      'Target 1RM for your other two big lifts. They drive the progress bars, '
+      'charts and home-screen widget when that lift is selected.';
+  @override
+  String get squatGoalLabel => 'Squat target 1RM';
+  @override
+  String get deadliftGoalLabel => 'Deadlift target 1RM';
+  @override
   String get settingsSaved => 'Settings saved successfully!';
   @override
   String get profileSection => 'Account';
@@ -129,6 +190,18 @@ class EnStrings implements AppStrings {
 
   @override
   String get estimated1rm => 'Estimated 1RM (Epley)';
+  @override
+  String get rankTitle => 'Strength rank';
+  @override
+  String rankLabel(StrengthRank rank) => switch (rank) {
+        StrengthRank.starter => 'Starter',
+        StrengthRank.beginner => 'Beginner',
+        StrengthRank.intermediate => 'Intermediate',
+        StrengthRank.advanced => 'Advanced',
+        StrengthRank.elite => 'Elite / Machine',
+      };
+  @override
+  String rankRatio(String multiple) => '×$multiple bodyweight total';
   @override
   String weeksCompleted(int weeks) => '$weeks weeks';
   @override
@@ -200,6 +273,21 @@ class EnStrings implements AppStrings {
   String get recentSessions => 'Recent sessions';
   @override
   String get noSessions => 'No sessions logged yet.';
+  @override
+  String get getProgressionPlan => 'Get progression plan';
+  @override
+  String get coachTitle => 'Your progression plan';
+  @override
+  String get coachIntro =>
+      'Let the AI coach read your recent sessions, spot plateaus and prescribe '
+      'your next weights.';
+  @override
+  String get coachThinking => 'Building your plan…';
+  @override
+  String get coachNeedsHistory =>
+      'Log a few sessions first so the coach has something to work with.';
+  @override
+  String coachFailed(String error) => 'Could not build a plan: $error';
   @override
   String get backToWork => 'Back to work';
   @override
@@ -319,7 +407,7 @@ class EnStrings implements AppStrings {
       'GEMINI_API_KEY was not passed at build time. See README.md.';
   @override
   String get geminiNoDataBlock =>
-      'Gemini did not return a parsable [DATA] block — add it manually.';
+      'Gemini did not return usable macros — add the meal manually.';
   @override
   String mealLogged(String name, int kcal) => 'Logged "$name" · $kcal kcal.';
   @override
@@ -421,6 +509,72 @@ class EnStrings implements AppStrings {
         (
           text: 'Suffer the pain of discipline or suffer the pain of regret.',
           author: 'Jim Rohn'
+        ),
+        (
+          text: 'Everybody wanna be a bodybuilder, but nobody wanna do no '
+              'heavy-ass squats.',
+          author: 'Gym Wisdom'
+        ),
+        (
+          text: 'The squat is the king of all exercises. The deadlift is the '
+              'king of all kings.',
+          author: 'Iron Philosophy'
+        ),
+        (
+          text: 'If the bar ain\'t bending, you\'re just pretending.',
+          author: 'Gym Wisdom'
+        ),
+        (
+          text: 'Light weight, baby! Nothing but a peanut.',
+          author: 'Ronnie Coleman'
+        ),
+        (
+          text: 'Somewhere someone is training when you are not. When you race '
+              'him, he will win.',
+          author: 'Tom Fleming'
+        ),
+        (
+          text: 'The worst thing I can be is the same as everybody else. I hate '
+              'that.',
+          author: 'Arnold Schwarzenegger'
+        ),
+        (
+          text: 'Rest day? I don\'t even rest between sets, brother.',
+          author: 'Gym Wisdom'
+        ),
+        (
+          text: 'Motivation gets you started. Habit is what keeps the bar '
+              'moving.',
+          author: 'Iron Philosophy'
+        ),
+        (
+          text: 'My protein shake brings the whole gym to the yard.',
+          author: 'Gym Humor'
+        ),
+        (
+          text: 'A one-hour workout is 4% of your day. No excuses.',
+          author: 'Iron Philosophy'
+        ),
+        (
+          text: 'Do not count the reps. Make the reps count.',
+          author: 'Gym Wisdom'
+        ),
+        (
+          text: 'Sleep is my secret pre-workout. And my secret post-workout.',
+          author: 'Gym Humor'
+        ),
+        (
+          text: 'The pump is temporary. The glory of the logbook is forever.',
+          author: 'Iron Philosophy'
+        ),
+        (
+          text: 'Strong people are harder to kill, and more useful in general.',
+          author: 'Mark Rippetoe'
+        ),
+        (
+          text: 'You against you. That is the only rivalry that ever mattered '
+              'under the bar.',
+          author: 'Iron Philosophy'
         ),
       ];
 

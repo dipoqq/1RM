@@ -77,6 +77,13 @@ class SupabaseService implements Backend {
   @override
   Future<void> signOut() => _auth(() => _client.auth.signOut());
 
+  /// Sends the reset link/OTP. Supabase's own endpoint does not disclose
+  /// whether the address exists, so the app does not either — the caller shows
+  /// the same "if an account exists…" message regardless.
+  @override
+  Future<void> sendPasswordReset(String email) =>
+      _auth(() => _client.auth.resetPasswordForEmail(email));
+
   // -- workouts --------------------------------------------------------------
 
   @override

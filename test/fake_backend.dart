@@ -83,6 +83,10 @@ class FakeBackend implements Backend {
   Future<bool> recordAchievement(String id) async =>
       unlockedAchievements.add(id); // Set.add returns false if already present
 
+  /// Every address a reset was requested for, in order, so a test can assert
+  /// the forgot-password flow reached the backend.
+  final List<String> passwordResets = [];
+
   // The rest of the surface is not what these tests are about.
   @override
   Future<void> signIn(String email, String password) async => signedIn = true;
@@ -90,6 +94,9 @@ class FakeBackend implements Backend {
   Future<void> signUp(String email, String password) async => signedIn = true;
   @override
   Future<void> signOut() async => signedIn = false;
+  @override
+  Future<void> sendPasswordReset(String email) async =>
+      passwordResets.add(email);
   @override
   Future<WorkoutHistory> fetchWorkouts() async => const WorkoutHistory([]);
   @override

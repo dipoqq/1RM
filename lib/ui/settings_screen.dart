@@ -25,7 +25,11 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final _benchGoalCtrl = TextEditingController();
+  final _squatGoalCtrl = TextEditingController();
+  final _deadliftGoalCtrl = TextEditingController();
   String? _goalError;
+  String? _squatError;
+  String? _deadliftError;
   bool _seeded = false;
 
   @override
@@ -34,7 +38,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     // Seeded once: refilling on every rebuild (and the language switch causes
     // one) would fight the user while they are typing.
     if (!_seeded) {
-      _benchGoalCtrl.text = ui.fmtKg(context.app.profile.benchGoalKg);
+      final p = context.app.profile;
+      _benchGoalCtrl.text = ui.fmtKg(p.benchGoalKg);
+      _squatGoalCtrl.text = ui.fmtKg(p.squatGoalKg);
+      _deadliftGoalCtrl.text = ui.fmtKg(p.deadliftGoalKg);
       _seeded = true;
     }
   }
@@ -42,6 +49,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _benchGoalCtrl.dispose();
+    _squatGoalCtrl.dispose();
+    _deadliftGoalCtrl.dispose();
     super.dispose();
   }
 
@@ -53,40 +62,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// write is in flight — a back-tap on a slow connection is enough — and
   /// reaching for `ScaffoldMessenger.of(context)` on the far side of that await
   /// is what produced "Looking up a deactivated widget's ancestor is unsafe".
-  Future<bool> _commitGoal() async {
-    final state = context.app;
-    final s = state.s;
-    final parsed =
-        double.tryParse(_benchGoalCtrl.text.trim().replaceAll(',', '.'));
+  /// Parse, validate, and persist one goal field. Generic over the three lifts:
+  /// [current] reads the value in force, [apply] writes the new one, [setError]
+  /// shows the field's error. Returns false when the field did not parse (so
+  /// [_save] does not claim success over an invalid number) or the write failed.
+  ///
+  /// Every `context`-dependent call is taken before the await or guarded by
+  /// [mounted] after it — a back-tap on a slow connection can pop this screen
+  /// while a Supabase write is in flight.
+  Future<bool> _commit({
+    required TextEditingController ctrl,
+    required double Function() current,
+    required Future<void> Function(double) apply,
+    required void Function(String?) setError,
+  }) async {
+    final s = context.app.s;
+    final parsed = double.tryParse(ctrl.text.trim().replaceAll(',', '.'));
 
     if (parsed == null || !Profile.isValidGoal(parsed)) {
-      setState(
-          () => _goalError = s.benchGoalOutOfRange(kMinGoalKg, kMaxGoalKg));
+      setError(s.benchGoalOutOfRange(kMinGoalKg, kMaxGoalKg));
       return false;
     }
-    setState(() => _goalError = null);
+    setError(null);
 
-    if (parsed == state.profile.benchGoalKg) return true;
+    if (parsed == current()) return true;
 
     try {
-      await state.update(benchGoalKg: parsed);
+      await apply(parsed);
       return true;
     } catch (e) {
       if (!mounted) return false;
       // update() rolled the profile back; put the field back with it rather
       // than leaving a number on screen that is not the one in force.
-      _benchGoalCtrl.text = ui.fmtKg(state.profile.benchGoalKg);
+      ctrl.text = ui.fmtKg(current());
       _snack(s.couldNotSaveSettings('$e'));
       return false;
     }
   }
 
-  /// The Save button. Confirms with a single success SnackBar covering whatever
-  /// the user changed — the goal they typed, the language they picked, or both.
+  Future<bool> _commitGoal() => _commit(
+        ctrl: _benchGoalCtrl,
+        current: () => context.app.profile.benchGoalKg,
+        apply: (v) => context.app.update(benchGoalKg: v),
+        setError: (e) => setState(() => _goalError = e),
+      );
+
+  Future<bool> _commitSquat() => _commit(
+        ctrl: _squatGoalCtrl,
+        current: () => context.app.profile.squatGoalKg,
+        apply: (v) => context.app.update(squatGoalKg: v),
+        setError: (e) => setState(() => _squatError = e),
+      );
+
+  Future<bool> _commitDeadlift() => _commit(
+        ctrl: _deadliftGoalCtrl,
+        current: () => context.app.profile.deadliftGoalKg,
+        apply: (v) => context.app.update(deadliftGoalKg: v),
+        setError: (e) => setState(() => _deadliftError = e),
+      );
+
+  /// The Save button. Commits all three goal fields and confirms with a single
+  /// success SnackBar covering whatever the user changed — a typed goal, the
+  /// language they picked, or both. An invalid field blocks the success.
   Future<void> _save() async {
     final s = context.app.s;
     final ok = await _commitGoal();
-    if (!mounted || !ok) return;
+    final okSquat = await _commitSquat();
+    final okDeadlift = await _commitDeadlift();
+    if (!mounted || !(ok && okSquat && okDeadlift)) return;
     _snack(s.settingsSaved);
   }
 
@@ -204,26 +247,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                TextField(
+                _GoalField(
+                  fieldKey: const Key('benchGoalField'),
                   controller: _benchGoalCtrl,
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
-                  ],
-                  decoration: InputDecoration(
-                    labelText: s.benchGoalLabel,
-                    suffixText: s.unitKg,
-                    errorText: _goalError,
-                  ),
-                  onSubmitted: (_) => _save(),
-                  onTapOutside: (_) {
-                    // Tapping away commits silently — the success SnackBar is
-                    // the Save button's job, and a toast on every blur would be
-                    // noise.
-                    _commitGoal();
-                    FocusManager.instance.primaryFocus?.unfocus();
-                  },
+                  label: s.benchGoalLabel,
+                  suffix: s.unitKg,
+                  error: _goalError,
+                  onSubmitted: _save,
+                  onCommit: _commitGoal,
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -242,8 +273,87 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          // Squat & deadlift join bench as first-class targets. Each commits on
+          // blur/submit; the shared Save above also flushes all three.
+          ui.SectionCard(
+            title: s.strengthGoalsSection,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _GoalField(
+                  fieldKey: const Key('squatGoalField'),
+                  controller: _squatGoalCtrl,
+                  label: s.squatGoalLabel,
+                  suffix: s.unitKg,
+                  error: _squatError,
+                  onSubmitted: _save,
+                  onCommit: _commitSquat,
+                ),
+                const SizedBox(height: 12),
+                _GoalField(
+                  fieldKey: const Key('deadliftGoalField'),
+                  controller: _deadliftGoalCtrl,
+                  label: s.deadliftGoalLabel,
+                  suffix: s.unitKg,
+                  error: _deadliftError,
+                  onSubmitted: _save,
+                  onCommit: _commitDeadlift,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  s.strengthGoalsHint,
+                  style: TextStyle(
+                      fontSize: 12, height: 1.4, color: c.textLow),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
+}
+
+/// A single target-1RM input: numeric, commits on submit and on tap-away.
+class _GoalField extends StatelessWidget {
+  const _GoalField({
+    required this.fieldKey,
+    required this.controller,
+    required this.label,
+    required this.suffix,
+    required this.error,
+    required this.onSubmitted,
+    required this.onCommit,
+  });
+
+  final Key fieldKey;
+  final TextEditingController controller;
+  final String label;
+  final String suffix;
+  final String? error;
+  final VoidCallback onSubmitted;
+  final Future<bool> Function() onCommit;
+
+  @override
+  Widget build(BuildContext context) => TextField(
+        key: fieldKey,
+        controller: controller,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]')),
+        ],
+        decoration: InputDecoration(
+          labelText: label,
+          suffixText: suffix,
+          errorText: error,
+        ),
+        onSubmitted: (_) => onSubmitted(),
+        onTapOutside: (_) {
+          // Tapping away commits silently — the success SnackBar is the Save
+          // button's job, and a toast on every blur would be noise.
+          onCommit();
+          FocusManager.instance.primaryFocus?.unfocus();
+        },
+      );
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/l10n/app_strings.dart';
+import '../../core/theme.dart';
 import '../../services/local_storage.dart';
 import '../../state/app_state.dart';
 
@@ -135,6 +136,7 @@ class _RemindersTabState extends State<RemindersTab> {
   @override
   Widget build(BuildContext context) {
     final s = context.s;
+    final c = context.colors;
 
     return Scaffold(
       body: SafeArea(
@@ -143,11 +145,13 @@ class _RemindersTabState extends State<RemindersTab> {
           children: [
             Text(
               s.remindersTitle,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: c.textHi,
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             for (final h in _habits) _habitCard(h),
           ],
         ),
@@ -157,64 +161,173 @@ class _RemindersTabState extends State<RemindersTab> {
 
   Widget _habitCard(_Habit habit) {
     final s = context.s;
+    final c = context.colors;
     final slots = _times[habit.key] ?? const <TimeOfDay>[];
     final enabled = _enabled[habit.key] ?? false;
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(habit.icon),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(
-                    habit.label(s),
-                    style: const TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.card,
+        borderRadius: BorderRadius.circular(AppRadii.card),
+        border: Border.all(
+          color: enabled ? c.accent.withValues(alpha: 0.35) : c.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              // Habit icon in a tinted disc — mint when the habit is on.
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: enabled ? c.accentTint : c.bgBase,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  habit.icon,
+                  size: 20,
+                  color: enabled ? c.accentDim : c.textLow,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  habit.label(s),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: c.textHi,
                   ),
                 ),
-                Switch(
-                  value: enabled,
-                  onChanged: (v) => _toggle(habit.key, v),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Wrap(
+              ),
+              Switch(
+                value: enabled,
+                activeThumbColor: c.onAccent,
+                activeTrackColor: c.accent,
+                onChanged: (v) => _toggle(habit.key, v),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          // Smoothly grows/shrinks as time pills are added and removed.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+            alignment: Alignment.topLeft,
+            child: Wrap(
               spacing: 8,
-              runSpacing: 4,
+              runSpacing: 8,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 if (slots.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: Text(
-                      s.reminderNoTime,
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.outline,
-                        fontStyle: FontStyle.italic,
-                      ),
+                  Text(
+                    s.reminderNoTime,
+                    style: TextStyle(
+                      color: c.textLow,
+                      fontStyle: FontStyle.italic,
+                      fontSize: 13,
                     ),
                   ),
                 for (final t in slots)
-                  Chip(
-                    label: Text(_formatTime(t)),
-                    onDeleted: () => _removeTime(habit.key, t),
-                    deleteIcon: const Icon(Icons.close, size: 16),
-                    visualDensity: VisualDensity.compact,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  _TimePill(
+                    label: _formatTime(t),
+                    onDelete: () => _removeTime(habit.key, t),
                   ),
-                ActionChip(
-                  avatar: const Icon(Icons.add, size: 18),
-                  label: Text(s.reminderAddTime),
-                  onPressed: () => _addTime(habit),
+                _AddTimePill(
+                  label: s.reminderAddTime,
+                  onTap: () => _addTime(habit),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A scheduled-time pill with a clock icon and a tap-to-remove X.
+class _TimePill extends StatelessWidget {
+  const _TimePill({required this.label, required this.onDelete});
+
+  final String label;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 6, 6, 6),
+      decoration: BoxDecoration(
+        color: c.accentTint,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.accent.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.schedule, size: 15, color: c.accentDim),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: c.accentDim,
+            ),
+          ),
+          const SizedBox(width: 2),
+          InkWell(
+            onTap: onDelete,
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(3),
+              child: Icon(Icons.close, size: 15, color: c.accentDim),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The dashed "add time" pill that opens the time picker.
+class _AddTimePill extends StatelessWidget {
+  const _AddTimePill({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: c.bgBase,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: c.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.add, size: 16, color: c.textMid),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: c.textMid,
+              ),
             ),
           ],
         ),

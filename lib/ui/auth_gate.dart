@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../core/l10n/app_locale.dart';
+import '../core/l10n/app_strings.dart';
+import '../core/password_policy.dart';
 import '../core/theme.dart';
 import '../services/backend.dart';
 import '../state/app_state.dart';
@@ -163,6 +165,16 @@ class _SignInScreenState extends State<SignInScreen> {
       return;
     }
 
+    // Strict rules apply only when creating the account. Enforcing them on
+    // sign-in would lock out anyone whose existing password predates the policy.
+    if (_signUp) {
+      final unmet = PasswordPolicy.firstUnmet(password);
+      if (unmet != null) {
+        setState(() => _error = context.s.passwordRuleError(unmet));
+        return;
+      }
+    }
+
     setState(() {
       _busy = true;
       _error = null;
@@ -260,6 +272,38 @@ class _SignInScreenState extends State<SignInScreen> {
                         onSubmitted: (_) => _busy ? null : _submit(),
                         decoration: InputDecoration(labelText: s.password),
                       ),
+                      // On sign-up the rules are shown up front, so the user
+                      // reads them before the first rejection rather than after.
+                      if (_signUp) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          s.passwordRequirements,
+                          style: TextStyle(fontSize: 12, color: c.textLow),
+                        ),
+                      ] else
+                        // The "Забыл пароль" entry point. Only on the sign-in
+                        // form: there is nothing to reset while creating an
+                        // account.
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _busy
+                                ? null
+                                : () => Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => ForgotPasswordScreen(
+                                          state: widget.state,
+                                          initialEmail: _email.text.trim(),
+                                        ),
+                                      ),
+                                    ),
+                            style: TextButton.styleFrom(
+                                foregroundColor: c.textMid,
+                                padding: EdgeInsets.zero,
+                                minimumSize: const Size(0, 32)),
+                            child: Text(s.forgotPassword),
+                          ),
+                        ),
                       if (_error != null) ...[
                         const SizedBox(height: 14),
                         Container(
@@ -312,6 +356,186 @@ class _SignInScreenState extends State<SignInScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The "Забыл пароль" flow: collect an email, trigger the reset, and confirm.
+///
+/// Pushed as its own route on top of [SignInScreen]. Wrapped in [AppScope] so
+/// `context.s` resolves inside the pushed route regardless of where the tree's
+/// scope sits, matching how the manual-meal sheet re-establishes it.
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({
+    super.key,
+    required this.state,
+    this.initialEmail = '',
+  });
+
+  final AppState state;
+  final String initialEmail;
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  late final _email = TextEditingController(text: widget.initialEmail);
+  bool _busy = false;
+  String? _error;
+
+  /// The address a link was sent to, once the request succeeds. Non-null flips
+  /// the screen to its confirmation state.
+  String? _sentTo;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final email = _email.text.trim();
+    if (email.isEmpty) {
+      setState(() => _error = context.s.credentialsRequired);
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    try {
+      await widget.state.service.sendPasswordReset(email);
+      if (mounted) setState(() => _sentTo = email);
+    } on BackendException catch (e) {
+      if (mounted) setState(() => _error = e.message);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Re-establish the scope for the pushed route (see class doc).
+    return AppScope(
+      state: widget.state,
+      child: Builder(builder: (context) {
+        final c = context.colors;
+        final s = context.s;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(s.resetPasswordTitle),
+            backgroundColor: Colors.transparent,
+          ),
+          body: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(28),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  child: _sentTo == null
+                      ? _form(context, c, s)
+                      : _confirmation(context, c, s),
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _form(BuildContext context, AppPalette c, AppStrings s) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(Icons.lock_reset, size: 40, color: c.accent),
+          const SizedBox(height: 16),
+          Text(
+            s.resetPasswordSubtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.textMid, height: 1.5),
+          ),
+          const SizedBox(height: 24),
+          TextField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            enabled: !_busy,
+            onSubmitted: (_) => _busy ? null : _submit(),
+            decoration: InputDecoration(labelText: s.email),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 14),
+            _ErrorBox(message: _error!),
+          ],
+          const SizedBox(height: 18),
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            child: _busy
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: c.onAccent),
+                  )
+                : Text(s.sendResetLink),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: _busy ? null : () => Navigator.of(context).pop(),
+            style: TextButton.styleFrom(foregroundColor: c.textMid),
+            child: Text(s.backToSignIn),
+          ),
+        ],
+      );
+
+  Widget _confirmation(BuildContext context, AppPalette c, AppStrings s) =>
+      Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(Icons.mark_email_read_outlined, size: 40, color: c.success),
+          const SizedBox(height: 16),
+          Text(
+            s.resetEmailSent(_sentTo!),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: c.textMid, height: 1.5),
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(s.backToSignIn),
+          ),
+        ],
+      );
+}
+
+/// The sign-in error card, reused by the reset form so both look the same.
+class _ErrorBox extends StatelessWidget {
+  const _ErrorBox({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: c.dangerTint,
+        borderRadius: BorderRadius.circular(AppRadii.control),
+        border: Border.all(color: c.danger.withValues(alpha: 0.35)),
+      ),
+      child: Text(
+        message,
+        style: TextStyle(fontSize: 13, color: c.danger),
       ),
     );
   }

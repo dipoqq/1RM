@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mint pill behind the completion percentage — high-contrast dark text on it. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#8EE3C8" />
+    <corners android:radius="999dp" />
+</shape>

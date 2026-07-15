@@ -10,9 +10,10 @@ import 'tabs/training_tab.dart';
 import 'tabs/reminders_tab.dart';
 import 'tabs/history_tab.dart';
 import 'widgets/confetti.dart';
+import 'widgets/sync_status_badge.dart';
+import 'widgets/achievements_sheet.dart';
 import '../models/workout.dart';
 import '../core/achievements.dart';
-import 'package:intl/intl.dart';
 
 class PlaceholderTab extends StatelessWidget {
   final String title;
@@ -88,64 +89,11 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
   }
 
   void _showAchievements() {
-    final s = context.s;
-    final achievements = AchievementsEngine.evaluate(WorkoutHistory(_allWorkouts), widget.state);
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.8,
-          maxChildSize: 0.9,
-          builder: (context, scrollController) {
-            return ListView(
-              controller: scrollController,
-              padding: const EdgeInsets.all(16),
-              children: [
-                Center(
-                  child: Text(s.achievementsTitle, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 16),
-                for (final cat in AchievementCategory.values) ...[
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    child: Text(
-                      cat == AchievementCategory.benchPress ? s.achievementsBenchPress :
-                      cat == AchievementCategory.squats ? s.achievementsSquats :
-                      cat == AchievementCategory.deadlift ? s.achievementsDeadlift : s.achievementsEasterEggs,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
-                    ),
-                  ),
-                  ...achievements.where((a) => a.category == cat).map((a) {
-                    return Card(
-                      color: a.unlocked ? Theme.of(context).colorScheme.surfaceContainerHighest : Theme.of(context).colorScheme.surface,
-                      child: ListTile(
-                        leading: Icon(a.unlocked ? Icons.emoji_events : Icons.lock_outline, color: a.unlocked ? Colors.amber : Colors.grey),
-                        title: Text(s.achievementTitle(a.id), style: TextStyle(fontWeight: a.unlocked ? FontWeight.bold : FontWeight.normal)),
-                        subtitle: a.unlocked
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(s.achievementDesc(a.id)),
-                                  if (a.unlockedAt != null)
-                                    Text(s.achievementUnlockedAt(DateFormat.yMMMd(s.locale.code).format(a.unlockedAt!)), style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                                ],
-                              )
-                            : Text(s.achievementNotUnlocked, style: const TextStyle(fontStyle: FontStyle.italic)),
-                      ),
-                    );
-                  }),
-                ],
-              ],
-            );
-          },
-        );
-      },
-    );
+    // One flat, unified list — no categories or nested tabs. The sheet handles
+    // its own ordering (unlocked-first) and mint/greyed styling.
+    final achievements =
+        AchievementsEngine.evaluate(WorkoutHistory(_allWorkouts), widget.state);
+    showAchievementsSheet(context, widget.state, achievements);
   }
 
   @override
@@ -161,6 +109,12 @@ class _HomeShellState extends State<HomeShell> with SingleTickerProviderStateMix
         ),
         title: const SizedBox.shrink(),
         actions: [
+          // Offline / pending-sync pill. Renders nothing when online and fully
+          // synced (or when there is no SyncScope, e.g. in tests).
+          const Padding(
+            padding: EdgeInsets.only(right: 4),
+            child: Center(child: SyncStatusBadge()),
+          ),
           IconButton(
             tooltip: 'Achievements',
             icon: const Icon(Icons.emoji_events, size: 20),

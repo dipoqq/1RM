@@ -30,8 +30,9 @@ class OneRMWidgetProvider : HomeWidgetProvider() {
 
         appWidgetIds.forEach { widgetId ->
             val views = RemoteViews(context.packageName, R.layout.one_r_m_widget).apply {
-                setTextViewText(R.id.widget_title, "1RM - $exercise")
+                setTextViewText(R.id.widget_title, "1RM · $exercise")
                 setTextViewText(R.id.widget_value, "$current kg / $goal kg")
+                setTextViewText(R.id.widget_percent, "$percent%")
                 setProgressBar(R.id.widget_progress, 100, percent, false)
             }
             appWidgetManager.updateAppWidget(widgetId, views)

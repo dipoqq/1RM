@@ -1,5 +1,7 @@
 import '../../models/profile.dart';
+import '../password_policy.dart';
 import '../progression.dart';
+import '../ranks.dart';
 import '../theme_mode.dart';
 import 'app_locale.dart';
 import 'app_strings.dart';
@@ -68,6 +70,55 @@ class RuStrings implements AppStrings {
   @override
   String get haveAccount => 'У меня уже есть аккаунт';
 
+  // -- password reset & policy ----------------------------------------------
+
+  @override
+  String get forgotPassword => 'Забыли пароль?';
+  @override
+  String get resetPasswordTitle => 'Сброс пароля';
+  @override
+  String get resetPasswordSubtitle =>
+      'Введите эл. почту, указанную при регистрации, и мы пришлём ссылку для '
+      'установки нового пароля.';
+  @override
+  String get sendResetLink => 'Отправить ссылку';
+  @override
+  String get backToSignIn => 'Назад ко входу';
+  @override
+  String resetEmailSent(String email) =>
+      'Если аккаунт для $email существует, ссылка для сброса пароля уже в пути. '
+      'Проверьте почту.';
+  @override
+  String get passwordRequirements =>
+      'Минимум 8 символов, строчные и заглавные буквы, цифра и спецсимвол.';
+  @override
+  String passwordRuleError(PasswordRule rule) => switch (rule) {
+        PasswordRule.minLength => 'Пароль должен быть не короче 8 символов.',
+        PasswordRule.lowercase =>
+          'Пароль должен содержать строчную букву.',
+        PasswordRule.uppercase =>
+          'Пароль должен содержать заглавную букву.',
+        PasswordRule.digit => 'Пароль должен содержать цифру.',
+        PasswordRule.symbol => 'Пароль должен содержать спецсимвол.',
+      };
+
+  // -- connectivity / offline sync ------------------------------------------
+
+  @override
+  String get offlineMode => 'Оффлайн-режим';
+  @override
+  String get offlineBanner =>
+      'Нет соединения. Продолжайте — тренировки сохраняются на устройстве и '
+      'синхронизируются автоматически при подключении.';
+  @override
+  String pendingSync(int count) =>
+      '$count ${_plural(count, 'тренировка ждёт', 'тренировки ждут', 'тренировок ждут')} синхронизации';
+  @override
+  String get syncing => 'Синхронизация…';
+  @override
+  String get savedOffline =>
+      'Сохранено оффлайн — синхронизируется при подключении.';
+
   // -- onboarding ------------------------------------------------------------
 
   @override
@@ -131,6 +182,16 @@ class RuStrings implements AppStrings {
   @override
   String benchGoalSaved(String kg) => 'Цель в жиме лёжа: $kg кг.';
   @override
+  String get strengthGoalsSection => 'Цели: присед и становая';
+  @override
+  String get strengthGoalsHint =>
+      'Целевой 1ПМ для двух других базовых упражнений. Они задают прогресс-бары, '
+      'графики и виджет на главном экране, когда выбрано это упражнение.';
+  @override
+  String get squatGoalLabel => 'Цель в приседе (1ПМ)';
+  @override
+  String get deadliftGoalLabel => 'Цель в становой (1ПМ)';
+  @override
   String get settingsSaved => 'Настройки успешно сохранены!';
   @override
   String get profileSection => 'Аккаунт';
@@ -143,6 +204,18 @@ class RuStrings implements AppStrings {
 
   @override
   String get estimated1rm => 'Расчётный 1ПМ (Эпли)';
+  @override
+  String get rankTitle => 'Звание';
+  @override
+  String rankLabel(StrengthRank rank) => switch (rank) {
+        StrengthRank.starter => 'Дрищ',
+        StrengthRank.beginner => 'Новичок',
+        StrengthRank.intermediate => 'Любитель',
+        StrengthRank.advanced => 'КМС штанги',
+        StrengthRank.elite => 'Олимпиец / Машина',
+      };
+  @override
+  String rankRatio(String multiple) => '×$multiple от веса тела';
   @override
   String weeksCompleted(int weeks) =>
       '$weeks ${_plural(weeks, 'неделя', 'недели', 'недель')}';
@@ -215,6 +288,21 @@ class RuStrings implements AppStrings {
   String get recentSessions => 'Последние тренировки';
   @override
   String get noSessions => 'Пока нет записанных тренировок.';
+  @override
+  String get getProgressionPlan => 'Получить план прогрессии';
+  @override
+  String get coachTitle => 'Ваш план прогрессии';
+  @override
+  String get coachIntro =>
+      'Позвольте ИИ-тренеру изучить ваши последние тренировки, найти плато и '
+      'назначить следующие рабочие веса.';
+  @override
+  String get coachThinking => 'Составляю план…';
+  @override
+  String get coachNeedsHistory =>
+      'Сначала запишите несколько тренировок, чтобы тренеру было с чем работать.';
+  @override
+  String coachFailed(String error) => 'Не удалось составить план: $error';
   @override
   String get backToWork => 'За работу';
   @override
@@ -344,7 +432,7 @@ class RuStrings implements AppStrings {
       'GEMINI_API_KEY не был передан при сборке. См. README.md.';
   @override
   String get geminiNoDataBlock =>
-      'Gemini не вернул корректный блок [DATA] — добавьте вручную.';
+      'Gemini не вернул нужные макросы — добавьте блюдо вручную.';
   @override
   String mealLogged(String name, int kcal) =>
       'Записано «$name» · $kcal ккал.';
@@ -445,6 +533,72 @@ class RuStrings implements AppStrings {
         (
           text: 'Терпи боль дисциплины или терпи боль сожаления.',
           author: 'Джим Рон'
+        ),
+        (
+          text: 'Все хотят быть качками, но никто не хочет делать тяжёлые '
+              'приседания.',
+          author: 'Мудрость зала'
+        ),
+        (
+          text: 'Присед — король всех упражнений. Становая — король всех '
+              'королей.',
+          author: 'Философия железа'
+        ),
+        (
+          text: 'Если гриф не гнётся — ты просто притворяешься.',
+          author: 'Мудрость зала'
+        ),
+        (
+          text: 'Лёгкий вес, детка! Всего лишь орешек.',
+          author: 'Ронни Коулман'
+        ),
+        (
+          text: 'Где-то кто-то тренируется, пока ты отдыхаешь. Встретишь его на '
+              'помосте — он победит.',
+          author: 'Том Флеминг'
+        ),
+        (
+          text: 'Худшее, кем я могу быть, — таким же, как все. Ненавижу это.',
+          author: 'Арнольд Шварценеггер'
+        ),
+        (
+          text: 'День отдыха? Я даже между подходами не отдыхаю, брат.',
+          author: 'Мудрость зала'
+        ),
+        (
+          text: 'Мотивация помогает начать. Привычка заставляет гриф двигаться '
+              'дальше.',
+          author: 'Философия железа'
+        ),
+        (
+          text: 'Мой протеиновый шейк собирает у турника весь зал.',
+          author: 'Зальный юмор'
+        ),
+        (
+          text: 'Часовая тренировка — это 4% твоего дня. Никаких отговорок.',
+          author: 'Философия железа'
+        ),
+        (
+          text: 'Не считай повторения. Сделай так, чтобы каждое повторение '
+              'считалось.',
+          author: 'Мудрость зала'
+        ),
+        (
+          text: 'Сон — мой секретный предтрен. И мой секретный послетрен.',
+          author: 'Зальный юмор'
+        ),
+        (
+          text: 'Пампинг временный. Слава в дневнике тренировок — навсегда.',
+          author: 'Философия железа'
+        ),
+        (
+          text: 'Сильных людей труднее убить и в целом от них больше пользы.',
+          author: 'Марк Риппто'
+        ),
+        (
+          text: 'Ты против себя. Это единственное соперничество, которое когда-'
+              'либо имело значение под грифом.',
+          author: 'Философия железа'
         ),
       ];
 

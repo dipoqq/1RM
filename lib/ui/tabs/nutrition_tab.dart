@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/hydration.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../core/theme.dart';
 import '../../models/meal.dart';
@@ -39,6 +40,13 @@ class _NutritionTabState extends State<NutritionTab> {
   DateTime _selected = Meal.dayOf(DateTime.now());
 
   List<Meal> _meals = const [];
+
+  /// `YYYY-MM-DD` keys of every day the lifter logged a workout, so the water
+  /// target can add its training-day bonus on exactly those days. Loaded with
+  /// the meals; the getter below reads it for whichever day is on screen.
+  Set<String> _trainingDayKeys = const {};
+  bool get _trainedOnSelected => _trainingDayKeys.contains(Meal.dateKey(_selected));
+
   bool _loading = true;
   bool _analyzing = false;
 
@@ -77,9 +85,15 @@ class _NutritionTabState extends State<NutritionTab> {
     try {
       await widget.state.load();
       final meals = await widget.state.service.fetchMeals(_selected);
+      // Which days have a training session drives the water target's
+      // active-day bonus. Fetched here alongside the meals.
+      final workouts = await widget.state.service.fetchWorkouts();
       if (!mounted) return;
       setState(() {
         _meals = meals;
+        _trainingDayKeys = {
+          for (final w in workouts.all) Meal.dateKey(w.date),
+        };
         _loading = false;
       });
       // Only seed the fields on first load; refilling them on every refresh
@@ -333,6 +347,7 @@ class _NutritionTabState extends State<NutritionTab> {
         _HydrationCard(
           day: _selected,
           profile: profile,
+          trainedOnDay: _trainedOnSelected,
           onAdd: () async {
             await LocalStorage.addWaterMl(_selected, 250);
             if (mounted) setState(() {});
@@ -770,12 +785,16 @@ class _RingsCard extends StatelessWidget {
 class _HydrationCard extends StatelessWidget {
   final DateTime day;
   final Profile profile;
+
+  /// Whether a workout was logged on [day]; adds the training-day water bonus.
+  final bool trainedOnDay;
   final VoidCallback onAdd;
   final VoidCallback onRemove;
 
   const _HydrationCard({
     required this.day,
     required this.profile,
+    required this.trainedOnDay,
     required this.onAdd,
     required this.onRemove,
   });
@@ -784,9 +803,12 @@ class _HydrationCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = context.s;
     final c = context.colors;
-    
+
     final currentMl = LocalStorage.getWaterMl(day);
-    final targetMl = (profile.weightKg * (profile.gender == Gender.male ? 35 : 31)).round();
+    // Dynamic: 35 ml per kg of the lifter's live bodyweight, plus a fixed bonus
+    // on days they trained. No hardcoded target.
+    final targetMl =
+        WaterMath.dailyTargetMl(profile.weightKg, trainedOnDay: trainedOnDay);
     final progress = targetMl > 0 ? (currentMl / targetMl).clamp(0.0, 1.0) : 0.0;
 
     return ui.SectionCard(

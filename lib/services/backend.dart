@@ -35,6 +35,11 @@ abstract interface class Backend {
   Future<void> signUp(String email, String password);
   Future<void> signOut();
 
+  /// Trigger a password-reset email/OTP for [email]. Resolves the same way
+  /// whether or not the address is registered — never revealing which emails
+  /// have accounts is the whole point of the flow.
+  Future<void> sendPasswordReset(String email);
+
   /// Newest first — WorkoutHistory's plateau logic depends on that ordering.
   Future<WorkoutHistory> fetchWorkouts();
   Future<void> addWorkout(Workout w);

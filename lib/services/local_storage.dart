@@ -33,6 +33,32 @@ class LocalStorage {
     await _prefs?.setStringList('reminder_times_$key', times);
   }
 
+  // -- Strength goals --------------------------------------------------------
+  //
+  // A local cache of the three target 1RMs. The source of truth is the Supabase
+  // profile; these are mirrored on every change so the goals survive offline and
+  // are available before the profile round-trips. Keys match the DB columns.
+
+  static const _benchGoalKey = 'bench_goal_kg';
+  static const _squatGoalKey = 'squat_goal_kg';
+  static const _deadliftGoalKey = 'deadlift_goal_kg';
+
+  static double? getBenchGoal() => _prefs?.getDouble(_benchGoalKey);
+  static double? getSquatGoal() => _prefs?.getDouble(_squatGoalKey);
+  static double? getDeadliftGoal() => _prefs?.getDouble(_deadliftGoalKey);
+
+  /// Persist all three target 1RMs together, so the local cache is never left
+  /// describing a half-updated set of goals.
+  static Future<void> setGoals({
+    required double benchKg,
+    required double squatKg,
+    required double deadliftKg,
+  }) async {
+    await _prefs?.setDouble(_benchGoalKey, benchKg);
+    await _prefs?.setDouble(_squatGoalKey, squatKg);
+    await _prefs?.setDouble(_deadliftGoalKey, deadliftKg);
+  }
+
   // -- Hydration --
 
   /// Serialises every hydration write. `addWaterMl` is a read-modify-write, so

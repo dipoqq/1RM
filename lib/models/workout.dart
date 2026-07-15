@@ -91,6 +91,27 @@ class WorkoutHistory {
   WorkoutHistory forExercise(Exercise exercise) =>
       WorkoutHistory(all.where((w) => w.exercise == exercise).toList());
 
+  /// Strip a timestamp to its local calendar day.
+  static DateTime dayOf(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  /// Every session logged on [day] (local calendar day), newest first — what the
+  /// calendar's day-detail sheet lists.
+  List<Workout> onDay(DateTime day) {
+    final key = dayOf(day);
+    return all.where((w) => dayOf(w.date) == key).toList();
+  }
+
+  /// The set of local calendar days that carry at least one COMPLETED session —
+  /// the days the calendar marks with a highlight dot. A failed-only day is not
+  /// marked: the dot means "you got the work in".
+  Set<DateTime> get completedDays => {
+        for (final w in all)
+          if (w.completed) dayOf(w.date),
+      };
+
+  /// Whether [day] has a completed session (fast membership for the calendar).
+  bool hasCompletedOn(DateTime day) => completedDays.contains(dayOf(day));
+
   List<Workout> get heavy => all.where((w) => w.isHeavy).toList();
 
   /// Weight of the most recent heavy day, else the most recent session at all.

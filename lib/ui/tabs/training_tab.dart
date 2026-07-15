@@ -11,11 +11,14 @@ import '../../core/theme.dart';
 import '../../models/profile.dart';
 import '../../models/workout.dart';
 import '../../state/app_state.dart';
+import '../../services/gemini_service.dart';
 import '../../services/widget_service.dart';
 import '../../core/achievements.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/common.dart' as ui;
 import '../widgets/confetti.dart';
+import '../widgets/rank_badge.dart';
+import '../widgets/sync_status_badge.dart';
 
 class TrainingTab extends StatefulWidget {
   const TrainingTab({
@@ -36,11 +39,14 @@ class _TrainingTabState extends State<TrainingTab> {
   final _repsCtrl = TextEditingController(text: '5');
   final _setsCtrl = TextEditingController(text: '3');
 
+  final _gemini = GeminiService();
+
   WorkoutHistory _history = const WorkoutHistory([]);
   String _type = WorkoutType.heavy;
   bool _completed = true;
   bool _loading = true;
   bool _saving = false;
+  bool _coaching = false;
   String? _error;
 
   /// Working weight the warm-up calculator is currently ramping to.
@@ -266,6 +272,53 @@ class _TrainingTabState extends State<TrainingTab> {
     );
   }
 
+  /// Ask the AI coach for a progression plan from the loaded history.
+  Future<void> _getPlan() async {
+    final s = context.s;
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (!GeminiService.isConfigured) {
+      _snack(messenger, s.geminiNotConfigured);
+      return;
+    }
+    if (_history.all.isEmpty) {
+      _snack(messenger, s.coachNeedsHistory);
+      return;
+    }
+
+    setState(() => _coaching = true);
+    try {
+      final plan = await _gemini.coach(
+        history: _history,
+        profile: widget.state.profile,
+        strings: s,
+      );
+      if (!mounted) return;
+      setState(() => _coaching = false);
+      _showPlanSheet(plan);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _coaching = false);
+      _snack(messenger, s.coachFailed('$e'));
+    }
+  }
+
+  void _showPlanSheet(String plan) {
+    final state = widget.state;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.colors.bgBase,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => AppScope(
+        state: state,
+        child: _PlanSheet(plan: plan),
+      ),
+    );
+  }
+
   /// Takes an already-resolved messenger rather than looking one up from
   /// `context`, so callers can capture it before an await and still show a
   /// snackbar safely on the far side of the async gap.
@@ -322,6 +375,10 @@ class _TrainingTabState extends State<TrainingTab> {
           child: AdaptiveColumns(
             onRefresh: _load,
             primary: [
+              // Non-blocking heads-up while offline; invisible otherwise.
+              const OfflineBanner(),
+              // Overall strength rank across the big three, against live weight.
+              RankBadge(history: _history, profile: context.app.profile),
               ui.QuoteCard(pick: _quote),
               if (exerciseHistory.plateauDetected)
                 _PlateauBanner(
@@ -344,6 +401,10 @@ class _TrainingTabState extends State<TrainingTab> {
                 onType: (t) => setState(() => _type = t),
                 onCompleted: (v) => setState(() => _completed = v),
                 onSubmit: _saving ? null : _log,
+              ),
+              _CoachCard(
+                loading: _coaching,
+                onGetPlan: _coaching ? null : _getPlan,
               ),
             ],
             secondary: [
@@ -631,6 +692,111 @@ class _LogCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// The AI progression-coach entry point: a short pitch and the "Get progression
+/// plan" button. Spins in place while the model is thinking.
+class _CoachCard extends StatelessWidget {
+  const _CoachCard({required this.loading, required this.onGetPlan});
+
+  final bool loading;
+  final VoidCallback? onGetPlan;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = context.s;
+
+    return ui.SectionCard(
+      title: s.coachTitle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            s.coachIntro,
+            style: TextStyle(fontSize: 12, height: 1.4, color: c.textLow),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: onGetPlan,
+              icon: loading
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: c.onAccent),
+                    )
+                  : const Icon(Icons.auto_awesome, size: 18),
+              label: Text(loading ? s.coachThinking : s.getProgressionPlan),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The bottom sheet that shows the coach's plan. Scrollable and selectable so a
+/// long plan can be read and copied.
+class _PlanSheet extends StatelessWidget {
+  const _PlanSheet({required this.plan});
+
+  final String plan;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final s = context.s;
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.7,
+      maxChildSize: 0.92,
+      builder: (context, scroll) => SingleChildScrollView(
+        controller: scroll,
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: c.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                Icon(Icons.auto_awesome, color: c.accent, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    s.coachTitle,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: c.textHi,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SelectableText(
+              plan,
+              style: TextStyle(fontSize: 14, height: 1.55, color: c.textMid),
+            ),
+          ],
+        ),
       ),
     );
   }

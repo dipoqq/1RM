@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -7,6 +9,7 @@ import '../core/theme_mode.dart';
 import '../models/profile.dart';
 import '../models/workout.dart';
 import '../services/backend.dart';
+import '../services/local_storage.dart';
 
 /// The single source of truth for everything that must stay in step across the
 /// whole app: the language, the bench press goal, the body metrics and the
@@ -190,6 +193,13 @@ class AppState extends ChangeNotifier {
     );
     _notify();
 
+    // Mirror any goal change into the local cache (SharedPreferences) so the
+    // three target 1RMs persist on-device independently of the network write
+    // below. A no-op before LocalStorage.init(), e.g. in unit tests.
+    if (benchGoalKg != null || squatGoalKg != null || deadliftGoalKg != null) {
+      _persistGoalsLocally();
+    }
+
     // Signed out (the language switch on the sign-in screen): there is no row
     // to write to yet. The choice still applies, and load() will overwrite it
     // with whatever this account saved last time.
@@ -242,7 +252,18 @@ class AppState extends ChangeNotifier {
 
     await service.saveProfile(next);
     _profile = next;
+    _persistGoalsLocally();
     _notify();
+  }
+
+  /// Write the three current target 1RMs to the on-device cache. Fire-and-forget:
+  /// the local mirror must never block or fail a profile update.
+  void _persistGoalsLocally() {
+    unawaited(LocalStorage.setGoals(
+      benchKg: _profile.benchGoalKg,
+      squatKg: _profile.squatGoalKg,
+      deadliftKg: _profile.deadliftGoalKg,
+    ));
   }
 
   /// Claim a milestone celebration, atomically against the database.
