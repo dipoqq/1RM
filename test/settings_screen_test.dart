@@ -29,10 +29,17 @@ void main() {
   /// Save sits below the fold on the 800×600 test surface now that the screen
   /// carries language, theme and gender cards above the bench goal — scroll to
   /// it the way a thumb would.
+  ///
+  /// Every lift's goal card now carries its own identical Save button, and any
+  /// of them commits all three fields — so tapping whichever one is built
+  /// nearest (`.first`) is exactly what a user would do.
   Future<void> tapSave(WidgetTester tester, {String label = 'Save'}) async {
-    final save = find.widgetWithText(FilledButton, label);
+    final save = find.widgetWithText(FilledButton, label).first;
     await tester.ensureVisible(save);
-    await tester.pump();
+    // Settle rather than pump once: the focused goal field schedules its own
+    // keep-visible scroll, and while that programmatic scroll activity runs
+    // the ListView ignores pointers — a tap mid-flight would hit nothing.
+    await tester.pumpAndSettle();
     await tester.tap(save);
   }
 
@@ -77,7 +84,8 @@ void main() {
     await tapSave(tester);
     await tester.pump(); // let the SnackBar in
 
-    expect(find.text('Settings saved successfully!'), findsOneWidget);
+    // The confirmation names the lift that changed, not a generic "saved".
+    expect(find.text('Goal for Bench Press updated.'), findsOneWidget);
   });
 
   testWidgets('the success message is localized', (tester) async {
@@ -87,7 +95,7 @@ void main() {
     await tapSave(tester, label: 'Сохранить');
     await tester.pump();
 
-    expect(find.text('Настройки успешно сохранены!'), findsOneWidget);
+    expect(find.text('Цель в жиме лёжа обновлена.'), findsOneWidget);
   });
 
   testWidgets('a typo is rejected instead of being persisted', (tester) async {
@@ -120,6 +128,9 @@ void main() {
     expect(backend.saves.single.squatGoalKg, 160);
     // Bench and deadlift were untouched, so only one write reached the backend.
     expect(backend.saves.single.benchGoalKg, state.profile.benchGoalKg);
+    // And the confirmation names the squat — not the bench press.
+    expect(find.text('Goal for Squat updated.'), findsOneWidget);
+    expect(find.text('Goal for Bench Press updated.'), findsNothing);
   });
 
   testWidgets('a deadlift typo is rejected, not persisted', (tester) async {

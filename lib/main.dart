@@ -1,14 +1,20 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/date_symbol_data_local.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+// LocalStorage is hidden: supabase ships its own class of that name, and the
+// one meant here is this app's services/local_storage.dart.
+import 'package:supabase_flutter/supabase_flutter.dart' hide LocalStorage;
 
 import 'core/l10n/app_locale.dart';
 import 'core/l10n/app_strings.dart';
 import 'core/theme.dart';
 import 'services/backend.dart';
 import 'services/connectivity_monitor.dart';
+import 'services/local_storage.dart';
+import 'services/notification_service.dart';
 import 'services/offline_sync_backend.dart';
 import 'services/supabase_service.dart';
 import 'services/workout_draft_store.dart';
@@ -60,6 +66,26 @@ Future<void> main() async {
   }
 
   runApp(BenchApp(state: state, sync: sync, bootError: bootError));
+
+  // Notification bootstrap, AFTER the first frame is on its way: initialise
+  // the plugin, raise the Android 13+ POST_NOTIFICATIONS prompt if it has
+  // never been answered, and re-register every stored reminder as a scheduled
+  // OS notification. Fire-and-forget — a notification problem must never
+  // block, or even slow, the app's boot.
+  unawaited(_bootstrapNotifications(state));
+}
+
+Future<void> _bootstrapNotifications(AppState? state) async {
+  try {
+    await LocalStorage.init();
+    await NotificationService.init();
+    await NotificationService.requestPermission();
+    await NotificationService.rescheduleAll(
+      AppStrings.of(state?.locale ?? AppLocale.fromSystem()),
+    );
+  } catch (e) {
+    debugPrint('Notification bootstrap skipped: $e');
+  }
 }
 
 class BenchApp extends StatefulWidget {

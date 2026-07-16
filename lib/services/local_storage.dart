@@ -59,6 +59,19 @@ class LocalStorage {
     await _prefs?.setDouble(_deadliftGoalKey, deadliftKg);
   }
 
+  // -- Home-screen widget -----------------------------------------------------
+
+  /// Which lift the strength widget tracks, as an [Exercise.name] string
+  /// ('benchPress' | 'squat' | 'deadlift'). Null until the user picks one —
+  /// callers default to the bench press.
+  static const _widgetExerciseKey = 'widget_exercise';
+
+  static String? getWidgetExercise() => _prefs?.getString(_widgetExerciseKey);
+
+  static Future<void> setWidgetExercise(String name) async {
+    await _prefs?.setString(_widgetExerciseKey, name);
+  }
+
   // -- Hydration --
 
   /// Serialises every hydration write. `addWaterMl` is a read-modify-write, so

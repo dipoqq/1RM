@@ -1,4 +1,5 @@
 import '../../models/profile.dart';
+import '../../models/workout.dart';
 import '../password_policy.dart';
 import '../progression.dart';
 import '../ranks.dart';
@@ -121,16 +122,38 @@ abstract interface class AppStrings {
   String benchGoalOutOfRange(double min, double max);
   String benchGoalSaved(String kg);
 
-  /// The Squat & Deadlift target-1RM card and its two fields.
-  String get strengthGoalsSection;
-  String get strengthGoalsHint;
+  /// The Squat and Deadlift target-1RM cards. Each of the three primary lifts
+  /// gets its own section with the SAME layout — a field, a hint and a Save
+  /// button — so no lift's goal looks like a second-class setting.
+  String get squatGoalSection;
+  String get squatGoalHint;
   String get squatGoalLabel;
+  String get deadliftGoalSection;
+  String get deadliftGoalHint;
   String get deadliftGoalLabel;
 
-  /// Shown when Save succeeds, whatever was changed.
+  /// Shown when Save changed exactly one lift's goal — the confirmation names
+  /// that lift ("Goal for Squat updated."), so saving the squat can never be
+  /// announced as a bench press update.
+  String goalSaved(Exercise exercise);
+
+  /// Shown when Save succeeds for anything else — several goals at once, or
+  /// nothing but the fields as they already were.
   String get settingsSaved;
   String get profileSection;
   String get genderHint;
+
+  // -- home-screen widget ------------------------------------------------------
+
+  /// The Settings card that picks which lift the strength widget tracks.
+  String get widgetSection;
+  String get widgetExerciseHint;
+
+  /// A lift's display name (segmented buttons, widget picker).
+  String exerciseName(Exercise exercise);
+
+  /// The nutrition (КБЖУ) widget's header line.
+  String get widgetNutritionTitle;
 
   // -- training --------------------------------------------------------------
 
@@ -199,9 +222,11 @@ abstract interface class AppStrings {
   String get unitYears;
   String get unitGrams;
 
-  /// Single-letter macro tags in the meal list ("94 C / 9 F").
+  /// Single-letter macro tags in the meal list ("94 C / 9 F") and on the
+  /// nutrition widget's macro line.
   String get carbsInitial;
   String get fatsInitial;
+  String get proteinInitial;
   String get gender;
   String get activityLevel;
   String get goal;
@@ -281,6 +306,13 @@ abstract interface class AppStrings {
   String get reminderNoTime;
   String get reminderTapToSchedule;
   String get reminderAddTime;
+
+  /// The body line of every reminder notification.
+  String get reminderNotificationBody;
+
+  /// Shown when the user enables a reminder but the OS notification
+  /// permission was denied — the reminder is stored but will stay silent.
+  String get notificationsDenied;
 
   // -- history / progress ----------------------------------------------------
   String get historyTitle;

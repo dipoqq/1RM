@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/l10n/app_strings.dart';
 import '../../core/theme.dart';
 import '../../services/local_storage.dart';
+import '../../services/notification_service.dart';
 import '../../state/app_state.dart';
 
 /// One configurable habit reminder: an on/off state plus a LIST of target times.
@@ -74,19 +75,32 @@ class _RemindersTabState extends State<RemindersTab> {
   }
 
   Future<void> _toggle(String key, bool value) async {
+    final s = context.s;
     await LocalStorage.setReminder(key, value);
     if (!mounted) return;
     setState(() => _enabled[key] = value);
+
+    // Turning a reminder ON is the moment to ask the OS for notification
+    // permission (the Android 13+ POST_NOTIFICATIONS runtime prompt) — the
+    // user just expressed exactly the intent the permission covers.
+    if (value) {
+      final granted = await NotificationService.requestPermission();
+      if (!granted && mounted) _snack(s.notificationsDenied);
+    }
+    // Re-register the OS schedule either way: on registers the habit's slots,
+    // off cancels them.
+    await NotificationService.rescheduleAll(s);
   }
 
   Future<void> _persistTimes(String key) =>
       LocalStorage.setReminderTimes(key, _times[key]!.map(_formatTime).toList());
 
   Future<void> _addTime(_Habit habit) async {
+    final s = context.s;
     final picked = await showTimePicker(
       context: context,
       initialTime: const TimeOfDay(hour: 8, minute: 0),
-      helpText: habit.label(context.s),
+      helpText: habit.label(s),
     );
     if (picked == null || !mounted) return;
 
@@ -106,12 +120,27 @@ class _RemindersTabState extends State<RemindersTab> {
     });
     await _persistTimes(habit.key);
     await LocalStorage.setReminder(habit.key, true);
+
+    // A new slot is a new scheduled notification; ask for permission (no-op if
+    // already granted) and rebuild the OS schedule so it fires on time.
+    final granted = await NotificationService.requestPermission();
+    if (!granted && mounted) _snack(s.notificationsDenied);
+    await NotificationService.rescheduleAll(s);
   }
 
   Future<void> _removeTime(String key, TimeOfDay time) async {
+    final s = context.s;
     setState(() => _times[key]!
         .removeWhere((t) => t.hour == time.hour && t.minute == time.minute));
     await _persistTimes(key);
+    // The slot's notification must go with it.
+    await NotificationService.rescheduleAll(s);
+  }
+
+  void _snack(String msg) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(msg)));
   }
 
   // -- HH:mm <-> TimeOfDay ----------------------------------------------------

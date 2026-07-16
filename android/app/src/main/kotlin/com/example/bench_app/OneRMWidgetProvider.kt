@@ -22,8 +22,17 @@ class OneRMWidgetProvider : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences,
     ) {
-        val exercise = widgetData.getString("widget_exercise_name", "Bench Press")
-            ?: "Bench Press"
+        // The lift picked in Settings ('benchPress' | 'squat' | 'deadlift'),
+        // mirrored to this container so the native side can resolve a title
+        // even before Dart pushes the display values for it.
+        val selected = widgetData.getString("widget_selected_exercise", null)
+        val fallbackName = when (selected) {
+            "squat" -> "Squat"
+            "deadlift" -> "Deadlift"
+            else -> "Bench Press"
+        }
+        val exercise = widgetData.getString("widget_exercise_name", fallbackName)
+            ?: fallbackName
         val current = widgetData.getString("widget_current_1rm", "0") ?: "0"
         val goal = widgetData.getString("widget_goal_1rm", "0") ?: "0"
         val percent = widgetData.getInt("widget_progress_percent", 0)

@@ -1,6 +1,7 @@
 import '../core/constants.dart';
 import '../core/l10n/app_locale.dart';
 import '../core/theme_mode.dart';
+import 'workout.dart';
 
 /// Fitness goal → the daily calorie delta applied on top of TDEE.
 enum Goal {
@@ -209,6 +210,15 @@ class Profile {
 
   bool hasCelebrated(double kg) =>
       celebratedMilestones.any((m) => (m - kg).abs() < 0.001);
+
+  /// The target 1RM for [exercise] — the one mapping from lift to goal, so the
+  /// Training tab, the widgets and the milestones all measure against the same
+  /// number.
+  double goalFor(Exercise exercise) => switch (exercise) {
+        Exercise.benchPress => benchGoalKg,
+        Exercise.squat => squatGoalKg,
+        Exercise.deadlift => deadliftGoalKg,
+      };
 
   /// Bench press progress of [best1rm] toward [benchGoalKg].
   BenchProgress benchProgress(double? best1rm) => progressFor(best1rm, benchGoalKg);

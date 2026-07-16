@@ -1,4 +1,5 @@
 import '../../models/profile.dart';
+import '../../models/workout.dart';
 import '../password_policy.dart';
 import '../progression.dart';
 import '../ranks.dart';
@@ -168,17 +169,43 @@ class EnStrings implements AppStrings {
   @override
   String benchGoalSaved(String kg) => 'Bench press goal set to $kg kg.';
   @override
-  String get strengthGoalsSection => 'Squat & deadlift goals';
+  String get squatGoalSection => 'Squat goal';
   @override
-  String get strengthGoalsHint =>
-      'Target 1RM for your other two big lifts. They drive the progress bars, '
-      'charts and home-screen widget when that lift is selected.';
+  String get squatGoalHint =>
+      'Target 1RM for your squat. Drives the progress bar, charts and the '
+      'home-screen widget when the squat is selected.';
   @override
   String get squatGoalLabel => 'Squat target 1RM';
   @override
+  String get deadliftGoalSection => 'Deadlift goal';
+  @override
+  String get deadliftGoalHint =>
+      'Target 1RM for your deadlift. Drives the progress bar, charts and the '
+      'home-screen widget when the deadlift is selected.';
+  @override
   String get deadliftGoalLabel => 'Deadlift target 1RM';
   @override
+  String goalSaved(Exercise exercise) => switch (exercise) {
+        Exercise.benchPress => 'Goal for Bench Press updated.',
+        Exercise.squat => 'Goal for Squat updated.',
+        Exercise.deadlift => 'Goal for Deadlift updated.',
+      };
+  @override
   String get settingsSaved => 'Settings saved successfully!';
+  @override
+  String get widgetSection => 'Home-screen widget';
+  @override
+  String get widgetExerciseHint =>
+      'Which lift the strength widget on your home screen tracks. It updates '
+      'the moment you log or delete a session.';
+  @override
+  String exerciseName(Exercise exercise) => switch (exercise) {
+        Exercise.benchPress => 'Bench press',
+        Exercise.squat => 'Squat',
+        Exercise.deadlift => 'Deadlift',
+      };
+  @override
+  String get widgetNutritionTitle => 'Nutrition · Today';
   @override
   String get profileSection => 'Account';
   @override
@@ -326,6 +353,8 @@ class EnStrings implements AppStrings {
   String get carbsInitial => 'C';
   @override
   String get fatsInitial => 'F';
+  @override
+  String get proteinInitial => 'P';
   @override
   String get gender => 'Gender';
   @override
@@ -604,6 +633,13 @@ class EnStrings implements AppStrings {
   String get reminderTapToSchedule => 'Tap to schedule';
   @override
   String get reminderAddTime => 'Add time';
+  @override
+  String get reminderNotificationBody =>
+      'Time for this habit — keep the streak alive.';
+  @override
+  String get notificationsDenied =>
+      'Notifications are disabled, so reminders will stay silent. Enable them '
+      'for 1RM in system settings.';
 
   // -- history / progress ----------------------------------------------------
   @override

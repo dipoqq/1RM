@@ -1,5 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Habit reminders as scheduled local notifications. POST_NOTIFICATIONS
+         is the Android 13+ (API 33) runtime permission NotificationService
+         requests; the alarm/boot permissions let flutter_local_notifications
+         fire at the exact minute picked and survive a reboot. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <application
         android:label="1RM"
         android:name="${applicationName}"
@@ -32,6 +40,22 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
+        <!-- flutter_local_notifications: fires the scheduled reminders and
+             re-registers them after a device reboot. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false" />
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
         <!-- Home-screen 1RM widget. Redrawn from Dart via
              HomeWidget.updateWidget(androidName: 'OneRMWidgetProvider'). -->
         <receiver
@@ -43,6 +67,20 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/one_r_m_widget_info" />
+        </receiver>
+
+        <!-- Daily nutrition (КБЖУ) widget: calories, protein, fats and carbs
+             against the daily targets. Redrawn from Dart via
+             HomeWidget.updateWidget(androidName: 'NutritionWidgetProvider'). -->
+        <receiver
+            android:name=".NutritionWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/nutrition_widget_info" />
         </receiver>
     </application>
     <!-- Required to query activities that can process text, see:

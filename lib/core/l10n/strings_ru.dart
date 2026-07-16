@@ -1,4 +1,5 @@
 import '../../models/profile.dart';
+import '../../models/workout.dart';
 import '../password_policy.dart';
 import '../progression.dart';
 import '../ranks.dart';
@@ -182,17 +183,43 @@ class RuStrings implements AppStrings {
   @override
   String benchGoalSaved(String kg) => 'Цель в жиме лёжа: $kg кг.';
   @override
-  String get strengthGoalsSection => 'Цели: присед и становая';
+  String get squatGoalSection => 'Цель в приседе';
   @override
-  String get strengthGoalsHint =>
-      'Целевой 1ПМ для двух других базовых упражнений. Они задают прогресс-бары, '
-      'графики и виджет на главном экране, когда выбрано это упражнение.';
+  String get squatGoalHint =>
+      'Целевой 1ПМ в приседе. Задаёт прогресс-бар, графики и виджет на '
+      'главном экране, когда выбран присед.';
   @override
   String get squatGoalLabel => 'Цель в приседе (1ПМ)';
   @override
+  String get deadliftGoalSection => 'Цель в становой тяге';
+  @override
+  String get deadliftGoalHint =>
+      'Целевой 1ПМ в становой тяге. Задаёт прогресс-бар, графики и виджет на '
+      'главном экране, когда выбрана становая.';
+  @override
   String get deadliftGoalLabel => 'Цель в становой (1ПМ)';
   @override
+  String goalSaved(Exercise exercise) => switch (exercise) {
+        Exercise.benchPress => 'Цель в жиме лёжа обновлена.',
+        Exercise.squat => 'Цель в приседе обновлена.',
+        Exercise.deadlift => 'Цель в становой тяге обновлена.',
+      };
+  @override
   String get settingsSaved => 'Настройки успешно сохранены!';
+  @override
+  String get widgetSection => 'Виджет на главном экране';
+  @override
+  String get widgetExerciseHint =>
+      'Какое упражнение отслеживает силовой виджет на главном экране. '
+      'Обновляется сразу после записи или удаления подхода.';
+  @override
+  String exerciseName(Exercise exercise) => switch (exercise) {
+        Exercise.benchPress => 'Жим лёжа',
+        Exercise.squat => 'Присед',
+        Exercise.deadlift => 'Становая',
+      };
+  @override
+  String get widgetNutritionTitle => 'КБЖУ · Сегодня';
   @override
   String get profileSection => 'Аккаунт';
   @override
@@ -349,6 +376,8 @@ class RuStrings implements AppStrings {
   String get carbsInitial => 'У';
   @override
   String get fatsInitial => 'Ж';
+  @override
+  String get proteinInitial => 'Б';
   @override
   String get gender => 'Пол';
   @override
@@ -628,6 +657,13 @@ class RuStrings implements AppStrings {
   String get reminderTapToSchedule => 'Нажмите, чтобы задать время';
   @override
   String get reminderAddTime => 'Добавить время';
+  @override
+  String get reminderNotificationBody =>
+      'Время для этой привычки — не прерывай серию.';
+  @override
+  String get notificationsDenied =>
+      'Уведомления отключены, поэтому напоминания не будут приходить. '
+      'Разрешите их для 1RM в настройках системы.';
 
   // -- history / progress ----------------------------------------------------
   @override

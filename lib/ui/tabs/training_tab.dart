@@ -96,6 +96,14 @@ class _TrainingTabState extends State<TrainingTab> {
       if (rec != null && _weightCtrl.text.isEmpty) {
         _weightCtrl.text = ui.fmtKg(rec);
       }
+      // Repaint the home-screen widget from the history just fetched. This is
+      // the path that runs on app launch AND after a delete (whose handler
+      // awaits _load), so a removed record never leaves stale numbers out
+      // there. Fire-and-forget: internally guarded, never delays the tab.
+      unawaited(WidgetService.syncStrength(
+        history: history,
+        profile: widget.state.profile,
+      ));
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -170,18 +178,18 @@ class _TrainingTabState extends State<TrainingTab> {
       final oldBest = oldHistory.forExercise(exercise).bestEstimated1rm;
       final newBest = history.forExercise(exercise).bestEstimated1rm;
 
-      final goalKg = switch (exercise) {
-        Exercise.benchPress => widget.state.profile.benchGoalKg,
-        Exercise.squat => widget.state.profile.squatGoalKg,
-        Exercise.deadlift => widget.state.profile.deadliftGoalKg,
-      };
+      final goalKg = widget.state.profile.goalFor(exercise);
 
       final oldPercent = widget.state.profile.progressFor(oldBest, goalKg).percent;
       final newPercent = widget.state.profile.progressFor(newBest, goalKg).percent;
 
-      // Push the fresh 1RM to the native home-screen widget. Fire-and-forget:
-      // it is internally guarded and must never delay or fail the log.
-      unawaited(WidgetService.updateHomeScreen(exercise, newBest ?? 0, goalKg));
+      // Push the fresh numbers to the native home-screen widget — the lift it
+      // tracks is the one picked in Settings, resolved inside syncStrength.
+      // Fire-and-forget: internally guarded, never delays or fails the log.
+      unawaited(WidgetService.syncStrength(
+        history: history,
+        profile: widget.state.profile,
+      ));
 
       var burst = false;
       if (oldPercent < 50 && newPercent >= 50) {
@@ -223,11 +231,7 @@ class _TrainingTabState extends State<TrainingTab> {
     final best = exerciseHistory.bestEstimated1rm;
     if (best == null) return;
 
-    final goalKg = switch (exercise) {
-      Exercise.benchPress => widget.state.profile.benchGoalKg,
-      Exercise.squat => widget.state.profile.squatGoalKg,
-      Exercise.deadlift => widget.state.profile.deadliftGoalKg,
-    };
+    final goalKg = widget.state.profile.goalFor(exercise);
 
     // Highest cleared milestone first, so one monster session that clears both
     // celebrates the goal rather than the 80 kg on the way to it.
@@ -342,11 +346,7 @@ class _TrainingTabState extends State<TrainingTab> {
     final exercise = widget.state.activeExercise;
     final exerciseHistory = _history.forExercise(exercise);
 
-    final goalKg = switch (exercise) {
-      Exercise.benchPress => context.app.profile.benchGoalKg,
-      Exercise.squat => context.app.profile.squatGoalKg,
-      Exercise.deadlift => context.app.profile.deadliftGoalKg,
-    };
+    final goalKg = context.app.profile.goalFor(exercise);
     final progress =
         context.app.profile.progressFor(exerciseHistory.bestEstimated1rm, goalKg);
 

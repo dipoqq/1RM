@@ -6,10 +6,12 @@ import 'package:flutter/widgets.dart';
 import '../core/l10n/app_locale.dart';
 import '../core/l10n/app_strings.dart';
 import '../core/theme_mode.dart';
+import '../models/meal.dart';
 import '../models/profile.dart';
 import '../models/workout.dart';
 import '../services/backend.dart';
 import '../services/local_storage.dart';
+import '../services/widget_service.dart';
 
 /// The single source of truth for everything that must stay in step across the
 /// whole app: the language, the bench press goal, the body metrics and the
@@ -200,17 +202,62 @@ class AppState extends ChangeNotifier {
       _persistGoalsLocally();
     }
 
+    // A goal change moves the strength widget's bar; a body/goal/activity
+    // change moves the nutrition widget's targets. Repaint the home screen
+    // for either, without ever blocking the profile write.
+    final movesWidgets = benchGoalKg != null ||
+        squatGoalKg != null ||
+        deadliftGoalKg != null ||
+        weightKg != null ||
+        heightCm != null ||
+        age != null ||
+        gender != null ||
+        goal != null ||
+        activity != null;
+
     // Signed out (the language switch on the sign-in screen): there is no row
     // to write to yet. The choice still applies, and load() will overwrite it
     // with whatever this account saved last time.
-    if (service.userId == null) return;
+    if (service.userId == null) {
+      if (movesWidgets) unawaited(refreshWidgets());
+      return;
+    }
 
     try {
       await service.saveProfile(_profile);
+      if (movesWidgets) unawaited(refreshWidgets());
     } catch (e) {
       _profile = previous;
       _notify();
       rethrow;
+    }
+  }
+
+  /// Recompute BOTH home-screen widgets from live data and force a native
+  /// redraw — the strength widget against fresh workout history, the nutrition
+  /// widget against today's meals. This is the cache-invalidation path: after
+  /// a delete the widgets repaint with the correct current values instead of
+  /// holding whatever they showed last.
+  ///
+  /// Fire-and-forget everywhere it is called: the fetches are re-reads of data
+  /// the app already holds server-side, and a widget refresh must never delay
+  /// or fail the interaction that triggered it.
+  Future<void> refreshWidgets() async {
+    try {
+      final history = await service.fetchWorkouts();
+      await WidgetService.syncStrength(history: history, profile: _profile);
+    } catch (e) {
+      debugPrint('AppState: strength widget refresh skipped ($e)');
+    }
+    try {
+      final meals = await service.fetchMeals(Meal.dayOf(DateTime.now()));
+      await WidgetService.updateNutrition(
+        s: s,
+        totals: MacroTotals.of(meals),
+        targets: _profile.targets,
+      );
+    } catch (e) {
+      debugPrint('AppState: nutrition widget refresh skipped ($e)');
     }
   }
 

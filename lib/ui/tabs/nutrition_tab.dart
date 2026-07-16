@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import '../../models/meal.dart';
 import '../../models/profile.dart';
 import '../../services/gemini_service.dart';
 import '../../services/local_storage.dart';
+import '../../services/widget_service.dart';
 import '../../state/app_state.dart';
 import '../widgets/adaptive.dart';
 import '../widgets/calendar_strip.dart';
@@ -80,6 +82,19 @@ class _NutritionTabState extends State<NutritionTab> {
     super.dispose();
   }
 
+  /// Repaint the nutrition home-screen widget with [meals]' totals — but only
+  /// when [day] is today: the widget always shows the current day, so browsing
+  /// or editing history must never overwrite it. Fire-and-forget: internally
+  /// guarded and never delays the diary.
+  void _pushNutritionWidget(List<Meal> meals, DateTime day) {
+    if (Meal.dayOf(day) != _today) return;
+    unawaited(WidgetService.updateNutrition(
+      s: widget.state.s,
+      totals: MacroTotals.of(meals),
+      targets: _profile.targets,
+    ));
+  }
+
   Future<void> _load() async {
     setState(() => _loading = true);
     try {
@@ -96,6 +111,7 @@ class _NutritionTabState extends State<NutritionTab> {
         };
         _loading = false;
       });
+      _pushNutritionWidget(meals, _selected);
       // Only seed the fields on first load; refilling them on every refresh
       // would fight the user while they are typing.
       if (_weightCtrl.text.isEmpty) {
@@ -231,6 +247,7 @@ class _NutritionTabState extends State<NutritionTab> {
         _describeCtrl.clear();
         _image = null;
       });
+      _pushNutritionWidget(meals, day);
       _snack(s.mealLogged(meal.name, meal.calories.round()));
     } catch (e) {
       if (!mounted) return;
@@ -244,6 +261,7 @@ class _NutritionTabState extends State<NutritionTab> {
     final meals = await widget.state.service.fetchMeals(_selected);
     if (!mounted) return;
     setState(() => _meals = meals);
+    _pushNutritionWidget(meals, _selected);
   }
 
   Future<void> _clearDay() async {
@@ -280,6 +298,9 @@ class _NutritionTabState extends State<NutritionTab> {
     await widget.state.service.clearDay(_selected);
     if (!mounted) return;
     setState(() => _meals = const []);
+    // A cleared day must repaint the widget back to zeros immediately — this
+    // is the "deleted data must not leave stale cache" path.
+    _pushNutritionWidget(const [], _selected);
     _snack(s.dayCleared(label));
   }
 
@@ -378,6 +399,7 @@ class _NutritionTabState extends State<NutritionTab> {
             final meals = await widget.state.service.fetchMeals(_selected);
             if (!mounted) return;
             setState(() => _meals = meals);
+            _pushNutritionWidget(meals, _selected);
           },
         ),
       ],
